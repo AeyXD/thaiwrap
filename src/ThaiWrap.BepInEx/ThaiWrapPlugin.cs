@@ -23,6 +23,9 @@ namespace ThaiWrap.BepInEx
         private ConfigEntry<bool>? _enabled;
         private ConfigEntry<int>? _maxWordLength;
         private ConfigEntry<int>? _unknownBreakThreshold;
+        private string? _wordListPath;
+        private int _lastMaxWordLength;
+        private int _lastUnknownThreshold;
 
         private void Awake()
         {
@@ -50,6 +53,9 @@ namespace ThaiWrap.BepInEx
                     UnknownBreakThreshold = _unknownBreakThreshold!.Value
                 });
                 Filter = new ThaiTextFilter(segmenter) { Enabled = _enabled.Value };
+                _wordListPath = wordListPath;
+                _lastMaxWordLength = _maxWordLength.Value;
+                _lastUnknownThreshold = _unknownBreakThreshold.Value;
                 Logger.LogInfo($"โหลดพจนานุกรม {segmenter.WordCount} คำ จาก {wordListPath}");
             }
             catch (Exception ex)
@@ -60,15 +66,37 @@ namespace ThaiWrap.BepInEx
 
             int patched = InstallHooks();
             if (patched > 0)
-                Logger.LogInfo($"ThaiWrap พร้อมทำงาน — hook ไป {patched} ตำแหน่ง (TMP/UGUI ที่พบในเกมนี้)");
+                Logger.LogInfo($"ThaiWrap พร้อมทำงาน — hook สำเร็จ {patched} ตำแหน่ง (TMP/UGUI ที่พบในเกมนี้)");
             else
-                Logger.LogWarning("ไม่พบ TextMeshPro / UnityEngine.UI.Text ในเกมนี้ (โหลดช้า? ลองเปิดใช้งานหลังเข้าฉาก)");
+                Logger.LogError("หา hook ไม่ได้เลย — ไม่พบ TextMeshPro / UnityEngine.UI.Text หรือ patch ล้มเหลวทั้งหมด (ดู log ด้านบน) รายงาน issue พร้อมชื่อเกมและเวอร์ชัน Unity ได้ที่ github.com/AeyXD/thaiwrap");
         }
 
         private void Update()
         {
             if (Filter != null && _enabled != null && Filter.Enabled != _enabled.Value)
                 Filter.Enabled = _enabled.Value;
+
+            // config การตัดคำเปลี่ยนกลางเกม → สร้าง segmenter ใหม่ทันที
+            if (_wordListPath != null && _maxWordLength != null && _unknownBreakThreshold != null &&
+                (_maxWordLength.Value != _lastMaxWordLength || _unknownBreakThreshold.Value != _lastUnknownThreshold))
+            {
+                _lastMaxWordLength = _maxWordLength.Value;
+                _lastUnknownThreshold = _unknownBreakThreshold.Value;
+                try
+                {
+                    var segmenter = ThaiSegmenter.FromFile(_wordListPath, new ThaiWrapOptions
+                    {
+                        MaxWordLength = _lastMaxWordLength,
+                        UnknownBreakThreshold = _lastUnknownThreshold
+                    });
+                    Filter = new ThaiTextFilter(segmenter) { Enabled = _enabled?.Value ?? true };
+                    Log?.LogInfo($"โหลดพจนานุกรมใหม่ ({segmenter.WordCount} คำ) ตาม config ที่เปลี่ยน");
+                }
+                catch (Exception ex)
+                {
+                    Log?.LogError("โหลดใหม่ตาม config ไม่สำเร็จ (คงใช้ตัวเดิม): " + ex.Message);
+                }
+            }
         }
 
         /// <summary>ค้นหา word list: ข้าง DLL ก่อน แล้วตามโฟลเดอร์ plugins ของ BepInEx</summary>
@@ -116,12 +144,13 @@ namespace ThaiWrap.BepInEx
             var harmony = new Harmony(PluginGuid);
             var prefix = new HarmonyMethod(typeof(Hooks).GetMethod("SetTextPrefix",
                 BindingFlags.Static | BindingFlags.NonPublic));
+            int ok = 0;
             foreach (var method in targets)
             {
-                try { harmony.Patch(method, prefix: prefix); }
+                try { harmony.Patch(method, prefix: prefix); ok++; }
                 catch (Exception ex) { Log?.LogWarning($"patch {method.DeclaringType?.Name}.set_text ไม่สำเร็จ: {ex.Message}"); }
             }
-            return targets.Count;
+            return ok; // นับเฉพาะที่ patch สำเร็จจริง
         }
 
         private static class Hooks

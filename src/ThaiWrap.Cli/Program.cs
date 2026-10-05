@@ -18,6 +18,7 @@ namespace ThaiWrap.Cli
             public string Mode = "zwsp"; // zwsp | sep
             public string Format = "auto";
             public string? Columns;
+            public string? JsonKeys;
             public bool DryRun;
             public bool Recursive;
             public bool InPlace;
@@ -89,6 +90,7 @@ namespace ThaiWrap.Cli
                     case "--format":
                     case "-f": cfg.Format = Val(args, ref i); break;
                     case "--columns": cfg.Columns = Val(args, ref i); break;
+                    case "--json-keys": cfg.JsonKeys = Val(args, ref i); break;
                     case "--dry-run": cfg.DryRun = true; break;
                     case "--recursive":
                     case "-r": cfg.Recursive = true; break;
@@ -179,12 +181,17 @@ namespace ThaiWrap.Cli
             }
             else if (cfg.InputPath != null && Directory.Exists(cfg.InputPath))
             {
-                // โหมด folder
-                if (cfg.InPlace)
+                // โหมด folder — ไฟล์ที่ไม่เปลี่ยนไม่เขียนอะไรเลย (กัน .bak ต้นฉบับถูกแทนที่เมื่อรันซ้ำ)
+                if (!changed)
                 {
-                    File.Copy(path, path + ".bak", overwrite: true);
+                    Console.Error.WriteLine("ไม่เปลี่ยนแปลง ข้าม: " + path);
+                }
+                else if (cfg.InPlace)
+                {
+                    string bak = path + ".bak";
+                    if (!File.Exists(bak)) File.Copy(path, bak); // เก็บ .bak รอบแรก (ต้นฉบับแท้) ไว้ตลอด
                     WriteTextWithBom(path, output, enc);
-                    Console.Error.WriteLine("เขียนทับ (+.bak): " + path + $"  [ZWSP +{inserted}]");
+                    Console.Error.WriteLine("เขียนทับ" + (File.Exists(bak) ? "" : " (+.bak ใหม่)") + ": " + path + $"  [ZWSP +{inserted}]");
                 }
                 else
                 {
@@ -235,7 +242,7 @@ namespace ThaiWrap.Cli
                     return CsvProcessor.Process(input, opts, transform);
                 }
                 case "json":
-                    return JsonStringProcessor.Process(input, transform);
+                    return JsonStringProcessor.Process(input, transform, BuildJsonKeyFilter(cfg));
                 case "po":
                     return PoProcessor.Process(input, transform);
                 case "keyvalue":
@@ -251,6 +258,15 @@ namespace ThaiWrap.Cli
                     return sb.ToString();
                 }
             }
+        }
+
+        /// <summary>--json-keys "desc,tooltip" → แปลงเฉพาะ value ใต้ key เหล่านี้ (null = ทุก value)</summary>
+        private static Func<string, bool>? BuildJsonKeyFilter(Config cfg)
+        {
+            if (cfg.JsonKeys == null) return null;
+            var set = new HashSet<string>(cfg.JsonKeys.Split(',').Select(s => s.Trim()).Where(s => s.Length > 0), StringComparer.Ordinal);
+            if (set.Count == 0) return null;
+            return k => set.Contains(k);
         }
 
         private static CsvOptions BuildCsvOptions(Config cfg, char delimiter)
@@ -357,6 +373,7 @@ namespace ThaiWrap.Cli
             "  -m, --mode <mode>     zwsp (default) | sep — sep แสดงคำคั่นด้วย |\n" +
             "  -f, --format <fmt>    auto | text | csv | tsv | json | po | keyvalue (default auto ตามนามสกุล)\n" +
             "  --columns <list>      csv/tsv: \"1,3\" หรือ \"ชื่อคอลัมน์\" — default ทุกคอลัมน์ (ใช้ชื่อ = ข้ามแถว header)\n" +
+            "  --json-keys <list>    json: แปลงเฉพาะ value ใต้ key เหล่านี้ เช่น \"desc,tooltip\" — default ทุก string value\n" +
             "  --dry-run             แสดง diff (ZWSP แสดงเป็น ·) โดยไม่เขียนไฟล์\n" +
             "  -r, --recursive       โหมด folder: เดินทั้งต้นไม้\n" +
             "  --inplace             โหมด folder: เขียนทับไฟล์เดิม + สำรอง .bak (default: สร้าง <ชื่อ>.zwsp.<ext>)\n" +

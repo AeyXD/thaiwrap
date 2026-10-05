@@ -22,8 +22,8 @@ namespace ThaiWrap
         // dangling at the end of a line separated from its consonant.
         public static bool IsLeadingVowel(char c) => c >= '\u0E40' && c <= '\u0E44';
 
-        // ๆ (mai yamok) and ฯ (paiyannoi) attach to the preceding word.
-        public static bool IsThaiPunctuation(char c) => c == '\u0E46' || c == '\u0E4F';
+        // ๆ (U+0E46 mai yamok) and ฯ (U+0E2F paiyannoi) attach to the preceding word.
+        public static bool IsThaiPunctuation(char c) => c == '\u0E46' || c == '\u0E2F';
 
         public static bool IsWhitespace(char c) => char.IsWhiteSpace(c);
 

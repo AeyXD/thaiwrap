@@ -44,9 +44,13 @@ dotnet run --project src/ThaiWrap.Cli -- data/ -r                 # ทั้ง
 dotnet run --project src/ThaiWrap.Cli -- th.txt -f keyvalue -o th.out.txt
 ```
 
-Options หลัก: `-f auto|text|csv|tsv|json|po|keyvalue` · `--columns "1,3" หรือ "ชื่อ"` · `--dry-run` (diff, ZWSP แสดงเป็น ·) · `-r` · `--inplace` (+.bak) · `--maxword` · `--unknown-threshold` · `--stats`
+Options หลัก: `-f auto|text|csv|tsv|json|po|keyvalue` · `--columns "1,3" หรือ "ชื่อ"` · `--json-keys "desc,tooltip"` · `--dry-run` (diff, ZWSP แสดงเป็น ·) · `-r` · `--inplace` (+.bak) · `--maxword` · `--unknown-threshold` · `--stats`
 
-ความปลอดภัย: keys/ID ไม่ถูกแตะ · BOM และ CRLF คงเดิม · รันซ้ำไม่เพิ่ม ZWSP ซ้ำ (idempotent) · โหมด folder ไม่ทับต้นฉบับเว้นแต่ใช้ --inplace (สำรอง .bak)
+ความปลอดภัย:
+- **JSON**: key ไม่ถูกแตะเสมอ · string **value** ถูกแปลงทุกตัวโดย default — ถ้าไฟล์มี value ที่เป็น ID/รหัส ให้ระบุ `--json-keys` เฉพาะ field ข้อความ
+- **CSV/TSV**: default แปลงทุกคอลัมน์ — ไฟล์ที่มีคอลัมน์ ID ควรระบุ `--columns` เสมอ
+- `{placeholder}` เช่น `{ชื่อผู้เล่น}` และแท็ก rich-text `<color=red>…</color>` / `<link="…">` **ไม่ถูกแทรก ZWSP ทั้งช่วง** แม้ข้างในมีตัวไทย
+- BOM และ CRLF คงเดิม · รันซ้ำไม่เพิ่ม ZWSP ซ้ำ (idempotent) · โหมด folder ข้ามไฟล์ที่ไม่เปลี่ยน และ `--inplace` จะไม่ทับ `.bak` เดิม (สำรองไว้ตั้งแต่รอบแรก)
 
 ## เว็บทดสอบ visual
 
@@ -66,7 +70,8 @@ cd web && python3 -m http.server 8741
 
 - ไม่แทรกก่อนสระ/วรรณยุกต์ที่ประกอบกับพยัญชนะก่อนหน้า (ั ิ ี ึ ื ุ ู ็ ่ ้ ๊ ๋ ํ ๎)
 - ไม่แทรกหลังสระหน้า (เ แ โ ใ ไ) ที่ยังไม่มีพยัญชนะตาม
-- ไม่แทรกก่อน ๆ (ไม้ยมก) และ ฯ (ไปยาลน้อย)
+- ไม่แทรกก่อน ๆ (U+0E46 ไม้ยมก) และ ฯ (U+0E2F ไปยาลน้อย)
+- ไม่แทรกทั้งช่วง `{placeholder}` และแท็ก rich-text `<...>` (ปิดได้ด้วย option `ProtectPlaceholders`)
 - ไม่แทรกติดช่องว่างเดิม, ต้น/ท้ายข้อความ, ก่อนเครื่องหมายปิด หรือหลังเครื่องหมายเปิด
 - ตัวเลข/อังกฤษ (`25%`, `150/200`, `XP`) คงเป็นก้อนเดียว
 - ชื่อเฉพาะ/คำนอกพจนานุกรมที่สั้นกว่า 8 cluster ถือเป็นก้อนเดียว ยาวกว่านั้นจึงยอมให้ตัดระดับ cluster (กันล้นกรอบ)

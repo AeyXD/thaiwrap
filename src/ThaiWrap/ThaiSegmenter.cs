@@ -132,6 +132,21 @@ namespace ThaiWrap
         /// <summary>Returns the text with U+200B inserted at safe Thai word boundaries.</summary>
         public string InsertZwsp(string text)
         {
+            if (string.IsNullOrEmpty(text)) return text ?? "";
+            var parts = SplitControlParts(text);
+            if (parts.Count == 1 && !parts[0].Masked) return InsertZwspRaw(text);
+
+            var sb = new StringBuilder(text.Length + 16);
+            foreach (var part in parts)
+            {
+                if (part.Masked) sb.Append(part.Text);
+                else sb.Append(InsertZwspRaw(part.Text).Trim(ThaiChars.ZeroWidthSpace));
+            }
+            return sb.ToString();
+        }
+
+        private string InsertZwspRaw(string text)
+        {
             var tokens = Tokenize(text);
             var sb = new StringBuilder(text.Length + tokens.Count);
             for (int k = 0; k < tokens.Count; k++)
@@ -148,6 +163,21 @@ namespace ThaiWrap
         /// <summary>Debug view: every token boundary except whitespace joins.</summary>
         public string SegmentToString(string text, string separator = "|")
         {
+            if (string.IsNullOrEmpty(text)) return text ?? "";
+            var parts = SplitControlParts(text);
+            if (parts.Count == 1 && !parts[0].Masked) return SegmentToStringRaw(text, separator);
+
+            var sb = new StringBuilder();
+            foreach (var part in parts)
+            {
+                if (part.Masked) sb.Append(part.Text);
+                else sb.Append(SegmentToStringRaw(part.Text, separator).Trim(separator.ToCharArray()));
+            }
+            return sb.ToString();
+        }
+
+        private string SegmentToStringRaw(string text, string separator)
+        {
             var tokens = Tokenize(text);
             var sb = new StringBuilder();
             for (int k = 0; k < tokens.Count; k++)
@@ -159,6 +189,47 @@ namespace ThaiWrap
                     sb.Append(separator);
             }
             return sb.ToString();
+        }
+
+        private struct ControlPart
+        {
+            public string Text;
+            public bool Masked;
+        }
+
+        /// <summary>
+        /// แยกส่วนควบคุมของเกมออกจากข้อความที่ต้องตัดคำ:
+        /// {placeholder} และ &lt;rich-text tag&gt; ต้องไม่ถูกแทรก ZWSP เด็ดขาด
+        /// (แม้ข้างในมีตัวอักษรไทย) เพราะการแทนค่า/อ้างอิงแท็กจะเสีย
+        /// </summary>
+        private List<ControlPart> SplitControlParts(string text)
+        {
+            var parts = new List<ControlPart>();
+            if (!_options.ProtectPlaceholders) return new List<ControlPart> { new ControlPart { Text = text } };
+
+            var sb = new StringBuilder();
+            int i = 0, n = text.Length;
+            while (i < n)
+            {
+                char c = text[i];
+                if (c == '{' || c == '<')
+                {
+                    char close = c == '{' ? '}' : '>';
+                    int j = i + 1;
+                    while (j < n && text[j] != close && text[j] != '\n' && text[j] != '\r') j++;
+                    if (j < n && text[j] == close) // พบตัวปิดในบรรทัดเดียวกัน → mask ทั้งช่วง
+                    {
+                        if (sb.Length > 0) { parts.Add(new ControlPart { Text = sb.ToString() }); sb.Length = 0; }
+                        parts.Add(new ControlPart { Text = text.Substring(i, j - i + 1), Masked = true });
+                        i = j + 1;
+                        continue;
+                    }
+                }
+                sb.Append(c);
+                i++;
+            }
+            if (sb.Length > 0) parts.Add(new ControlPart { Text = sb.ToString() });
+            return parts;
         }
 
         private static bool ShouldInsertBetween(Token t, Token next)

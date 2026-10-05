@@ -11,7 +11,7 @@ const ThaiChars = {
     return x === 0x0E31 || (x >= 0x0E34 && x <= 0x0E3A) || (x >= 0x0E47 && x <= 0x0E4E);
   },
   isLeadingVowel(c) { const x = c.codePointAt(0); return x >= 0x0E40 && x <= 0x0E44; },
-  isThaiPunctuation(c) { const x = c.codePointAt(0); return x === 0x0E46 || x === 0x0E4F; },
+  isThaiPunctuation(c) { const x = c.codePointAt(0); return x === 0x0E46 || x === 0x0E2F; },
   isWhitespace(c) { return /\s/.test(c); },
   isAlnum(c) {
     const x = c.codePointAt(0);
@@ -36,7 +36,7 @@ const BREAKABLE = new Set([TokenKind.DictionaryWord, TokenKind.Cluster, TokenKin
 
 class ThaiSegmenter {
   constructor(words, options) {
-    this.options = Object.assign({ maxWordLength: 12, unknownBreakThreshold: 8 }, options);
+    this.options = Object.assign({ maxWordLength: 12, unknownBreakThreshold: 8, protectPlaceholders: true }, options);
     this.words = new Set();
     for (const w of words) {
       const t = (w || '').trim();
@@ -119,6 +119,19 @@ class ThaiSegmenter {
   }
 
   insertZwsp(text) {
+    if (!text) return text;
+    const parts = this._splitControlParts(text);
+    if (parts.length === 1 && !parts[0].masked) return this._insertZwspRaw(text);
+    let out = '';
+    const edge = new RegExp('^\\u200B+|\\u200B+$', 'g');
+    for (const p of parts) {
+      if (p.masked) out += p.text;
+      else out += this._insertZwspRaw(p.text).replace(edge, '');
+    }
+    return out;
+  }
+
+  _insertZwspRaw(text) {
     const tokens = this.tokenize(text);
     let out = '';
     for (let k = 0; k < tokens.length; k++) {
@@ -131,6 +144,20 @@ class ThaiSegmenter {
 
   segmentToString(text, sep) {
     sep = sep || '|';
+    if (!text) return text;
+    const parts = this._splitControlParts(text);
+    if (parts.length === 1 && !parts[0].masked) return this._segmentToStringRaw(text, sep);
+    let out = '';
+    const esc = sep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const edge = new RegExp('^' + esc + '+|' + esc + '+$', 'g');
+    for (const p of parts) {
+      if (p.masked) out += p.text;
+      else out += this._segmentToStringRaw(p.text, sep).replace(edge, '');
+    }
+    return out;
+  }
+
+  _segmentToStringRaw(text, sep) {
     const tokens = this.tokenize(text);
     let out = '';
     for (let k = 0; k < tokens.length; k++) {
@@ -139,6 +166,33 @@ class ThaiSegmenter {
         tokens[k].kind !== TokenKind.Whitespace && tokens[k + 1].kind !== TokenKind.Whitespace) out += sep;
     }
     return out;
+  }
+
+  // แยกส่วนควบคุม {placeholder} / <tag> ออกก่อนตัดคำ — mirror ของ C# SplitControlParts
+  _splitControlParts(text) {
+    if (!this.options.protectPlaceholders) return [{ text: text, masked: false }];
+    const parts = [];
+    let cur = '';
+    let i = 0;
+    const n = text.length;
+    while (i < n) {
+      const c = text[i];
+      if (c === '{' || c === '<') {
+        const close = c === '{' ? '}' : '>';
+        let j = i + 1;
+        while (j < n && text[j] !== close && text[j] !== '\n' && text[j] !== '\r') j++;
+        if (j < n && text[j] === close) {
+          if (cur) { parts.push({ text: cur, masked: false }); cur = ''; }
+          parts.push({ text: text.slice(i, j + 1), masked: true });
+          i = j + 1;
+          continue;
+        }
+      }
+      cur += c;
+      i++;
+    }
+    if (cur) parts.push({ text: cur, masked: false });
+    return parts;
   }
 
   _shouldInsertBetween(t, next) {

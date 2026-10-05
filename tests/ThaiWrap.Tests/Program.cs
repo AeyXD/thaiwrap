@@ -120,6 +120,19 @@ namespace ThaiWrap.Tests
             string t10 = seg.InsertZwsp("บรรทัดที่หนึ่ง\nบรรทัดที่สอง");
             Check("newlines preserved", t10.Contains('\n') && !t10.Contains(zw + "\n") && !t10.Contains("\n" + zw), Show(t10));
 
+            Console.WriteLine("== placeholders / rich-text / ฯ ==");
+            string g1 = seg.InsertZwsp("โปรดพบ {ชื่อผู้เล่น} ที่หอคอยกลางเมืองเมื่อพระอาทิตย์ตกดิน");
+            Check("mask: {…} ครบและไม่มี ZWSP ข้างใน", g1.Contains("{ชื่อผู้เล่น}"), Show(g1));
+            Check("mask: ข้อความรอบ mask ยังถูกตัดคำ", g1.Contains(zw), Show(g1));
+            Check("mask: ไม่มี ZWSP ติดขอบ mask",
+                !g1.Contains("}" + zw) && !g1.Contains(zw + "{") && !g1.Contains("{" + zw) && !g1.Contains(zw + "}"), Show(g1));
+            string g2 = seg.InsertZwsp("<color=red>คำเตือน</color> มีกับดักอยู่ข้างหน้า");
+            Check("mask: แท็ก rich-text ครบทั้งเปิด-ปิด", g2.Contains("<color=red>") && g2.Contains("</color>"), Show(g2));
+            Check("mask: ข้อความในแท็กยังถูกตัดคำ",
+                g2.Replace("<color=red>", "").Replace("</color>", "").Contains(zw), Show(g2));
+            string g3 = seg.InsertZwsp("เดินทางจากกรุงเทพฯ ไปยังอยุธยาด้วยเรือโดยสาร");
+            Check("ฯ (U+0E2F): ไม่แทรก ZWSP ก่อน/หลัง ฯ", !g3.Contains(zw + "ฯ") && !g3.Contains("ฯ" + zw), Show(g3));
+
             Console.WriteLine("== formats: csv ==");
             string csv = File.ReadAllText("tests/samples/items.csv", Encoding.UTF8);
             var table0 = CsvProcessor.ParseTable(csv, ',');
@@ -147,6 +160,9 @@ namespace ThaiWrap.Tests
             Check("json: ค่าที่ escape \\\\uXXXX ถูก decode+แปลงถูก", jsonOut.Contains("นักเดินทาง" + zw));
             Check("json: โครงสร้างยัง valid (สแกนซ้ำไม่พัง)",
                 JsonStringProcessor.Process(jsonOut, s => s) == jsonOut);
+            string jsonKeys = JsonStringProcessor.Process(json, s => seg.InsertZwsp(s), k => k == "desc");
+            Check("json --json-keys: แปลงเฉพาะ key ที่เลือก",
+                jsonKeys.Contains(zw) && jsonKeys.Contains("\"name\": \"ดาบแห่งรุ่งอรุณ\""));
 
             Console.WriteLine("== formats: po ==");
             string po = File.ReadAllText("tests/samples/messages.po", Encoding.UTF8);

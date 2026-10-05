@@ -10,10 +10,13 @@ namespace ThaiWrap.Formats
     /// </summary>
     public static class JsonStringProcessor
     {
-        public static string Process(string input, Func<string, string> transform)
+        /// <param name="keyFilter">ถ้าระบุ — แปลงเฉพาะ value ที่อยู่ใต้ key ชื่อนี้
+        /// (ค่าใน array ใช้ชื่อ key ของ array นั้น)</param>
+        public static string Process(string input, Func<string, string> transform, Func<string, bool>? keyFilter = null)
         {
             var sb = new StringBuilder(input.Length);
             int i = 0, n = input.Length;
+            string? lastKey = null;
 
             while (i < n)
             {
@@ -36,9 +39,13 @@ namespace ThaiWrap.Formats
                 while (j < n && (input[j] == ' ' || input[j] == '\t' || input[j] == '\r' || input[j] == '\n')) j++;
                 bool isKey = j < n && input[j] == ':';
 
-                if (isKey) { sb.Append(literal); continue; }
+                if (isKey) { lastKey = Decode(literal); sb.Append(literal); continue; }
 
                 string decoded = Decode(literal);
+                if (keyFilter != null && (lastKey == null || !keyFilter(lastKey)))
+                {
+                    sb.Append(literal); continue; // ไม่ใช่ field ที่เลือก
+                }
                 string transformed = transform(decoded);
                 if (transformed == decoded) { sb.Append(literal); continue; }
                 sb.Append(Encode(transformed));

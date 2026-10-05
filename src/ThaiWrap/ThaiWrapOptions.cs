@@ -17,5 +17,12 @@ namespace ThaiWrap
         /// text box is worse still.
         /// </summary>
         public int UnknownBreakThreshold { get; set; } = 8;
+
+        /// <summary>
+        /// ปกป้องส่วนควบคุมของเกมก่อนตัดคำ: {placeholder}, %s และแท็ก rich-text อย่าง
+        /// &lt;color=red&gt;…&lt;/color&gt; หรือ &lt;link="…"&gt; จะไม่ถูกแทรก ZWSP เด็ดขาด
+        /// เพราะการแทนค่า/อ้างอิงจะเสีย แม้ข้างในจะมีตัวอักษรไทย
+        /// </summary>
+        public bool ProtectPlaceholders { get; set; } = true;
     }
 }
