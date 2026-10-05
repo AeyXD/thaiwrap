@@ -165,16 +165,16 @@ namespace ThaiWrap.Tests
 
             Console.WriteLine("== runtime filter (BepInEx hook logic) ==");
             var filter = new ThaiWrap.BepInEx.ThaiTextFilter(seg) { Enabled = true };
-            string f1 = filter.Process("Hello World");
+            string f1 = ProcessNonNull(filter, "Hello World");
             Check("filter: ข้อความไม่มีไทยผ่านเป๊ะ (fast reject)", f1 == "Hello World" && filter.SkippedCount == 1);
-            string f2 = filter.Process("นักเดินทางจากแดนไกล");
+            string f2 = ProcessNonNull(filter, "นักเดินทางจากแดนไกล");
             Check("filter: ข้อความไทยได้ ZWSP", f2.Contains(zw));
-            string f3 = filter.Process("นักเดินทางจากแดนไกล");
+            string f3 = ProcessNonNull(filter, "นักเดินทางจากแดนไกล");
             Check("filter: cache hit เมื่อ set ซ้ำ", f3 == f2 && filter.CacheHitCount == 1);
-            string f4 = filter.Process(f2);
+            string f4 = ProcessNonNull(filter, f2);
             Check("filter: idempotent (ป้อนข้อความที่มี ZWSP แล้ว)", f4 == f2);
             filter.Enabled = false;
-            string f5 = filter.Process("ข้อความทดสอบใหม่");
+            string f5 = ProcessNonNull(filter, "ข้อความทดสอบใหม่");
             Check("filter: Enabled=false = ผ่านตรง", f5 == "ข้อความทดสอบใหม่");
             filter.Enabled = true;
             // typewriter: เกมผลักข้อความทีละตัวทุกเฟรม — ทุก intermediate ต้อง valid และไม่พังเมื่อถึงเต็ม
@@ -212,6 +212,13 @@ namespace ThaiWrap.Tests
         }
 
         private static string Show(string s) => s.Replace('\u200B', '·');
+
+        private static string ProcessNonNull(ThaiWrap.BepInEx.ThaiTextFilter f, string s)
+        {
+            var r = f.Process(s);
+            if (r == null) throw new InvalidOperationException("Process returned null for non-null input");
+            return r;
+        }
 
         /// <summary>ดึง string literal ทุกตัวที่เป็น key (ตามด้วย ':') แบบ raw — ใช้เทียบว่า keys ไม่ถูกแตะ</summary>
         private static string ExtractJsonKeys(string json)

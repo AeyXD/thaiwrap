@@ -35,7 +35,7 @@ namespace ThaiWrap.BepInEx
             _unknownBreakThreshold = Config.Bind("Segmentation", "UnknownBreakThreshold", 8,
                 "จำนวน cluster ก่อนยอมให้ตัดข้อความนอกพจนานุกรม");
 
-            string wordListPath = FindWordList();
+            string? wordListPath = FindWordList();
             if (wordListPath == null)
             {
                 Logger.LogError("ไม่พบ words_th.txt — วางไฟล์ไว้ที่ BepInEx/plugins/ThaiWrap/words_th.txt (โหลดจาก https://github.com/AeyXD/thaiwrap) แล้วรีสตาร์ทเกม");

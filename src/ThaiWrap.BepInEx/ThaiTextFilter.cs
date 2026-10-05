@@ -1,5 +1,9 @@
 using System.Collections.Generic;
 
+// ไฟล์นี้ถูก compile ร่วมในหลายโปรเจกต์ (plugin net35 / tests net10) —
+// ปิด nullable annotations ในระดับไฟล์เพื่อพฤติกรรมเดียวกันทุกที่
+#nullable disable
+
 namespace ThaiWrap.BepInEx
 {
     /// <summary>
@@ -26,7 +30,7 @@ namespace ThaiWrap.BepInEx
             _cacheLimit = cacheLimit < 16 ? 16 : cacheLimit;
         }
 
-        public string? Process(string? value)
+        public string Process(string value)
         {
             if (!Enabled || value == null) return value;
             if (!ContainsThai(value)) { SkippedCount++; return value; }
