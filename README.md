@@ -80,7 +80,9 @@ cd web && python3 -m http.server 8741
 - **Phase 2 (CLI ใช้งานจริง): เสร็จ** — ดูที่ [docs/PHASE2.md](docs/PHASE2.md)
   - รองรับ csv/tsv/json/po/key-value · dry-run diff · เลือกคอลัมน์ · BOM/CRLF คงเดิม · idempotent · โหมด folder
   - เหลือ: pilot กับทีมแปลจริง 1 ทีม
-- Phase 3: BepInEx plugin สำหรับเกม Unity
+- **Phase 3 (BepInEx plugin): โค้ดเสร็จ** — ดูที่ [docs/PHASE3.md](docs/PHASE3.md)
+  - hook TextMeshPro/UGUI ตอนรันด้วย Harmony + cache + config · net35 DLL เดียวจบไม่มี dependency
+  - แพ็กติดตั้งด้วย `./tools/package-plugin.sh` · เหลือ: ทดสอบในเกม Unity จริง
 
 ## License
 
