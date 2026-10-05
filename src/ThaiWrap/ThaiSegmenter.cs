@@ -22,7 +22,7 @@ namespace ThaiWrap
             foreach (var w in words)
             {
                 var t = w?.Trim();
-                if (string.IsNullOrEmpty(t)) continue;
+                if (t == null || t.Length == 0) continue;
                 if (t.IndexOf(' ') >= 0 || t.IndexOf('\t') >= 0 || t.IndexOf('\r') >= 0 || t.IndexOf('\n') >= 0)
                     continue; // entries containing whitespace can never match space-free Thai text
                 if (t.Length < 2) continue; // single characters create noise, not word boundaries

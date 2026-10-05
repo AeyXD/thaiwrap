@@ -151,7 +151,7 @@ namespace ThaiWrap.Cli
         private static int RunFile(Config cfg, string path, string? outputPath, Func<string, string> transform, ThaiSegmenter segmenter, Totals totals)
         {
             totals.Files++;
-            string format = ResolveFormat(cfg, path);
+            string? format = ResolveFormat(cfg, path);
             if (format == null)
             {
                 Console.Error.WriteLine("ข้าม (นามสกุลไม่รู้จัก): " + path);
