@@ -19,9 +19,10 @@ namespace ThaiWrap.BepInEx
         internal static ThaiTextFilter Filter;
         internal static ManualLogSource Log;
 
-        private ConfigEntry<bool> _enabled;
-        private ConfigEntry<int> _maxWordLength;
-        private ConfigEntry<int> _unknownBreakThreshold;
+        // ถูก bind ใน Awake() ตาม pattern ของ BepInEx — ไม่ใช่ใน constructor
+        private ConfigEntry<bool>? _enabled;
+        private ConfigEntry<int>? _maxWordLength;
+        private ConfigEntry<int>? _unknownBreakThreshold;
 
         private void Awake()
         {
@@ -45,8 +46,8 @@ namespace ThaiWrap.BepInEx
             {
                 var segmenter = ThaiSegmenter.FromFile(wordListPath, new ThaiWrapOptions
                 {
-                    MaxWordLength = _maxWordLength.Value,
-                    UnknownBreakThreshold = _unknownBreakThreshold.Value
+                    MaxWordLength = _maxWordLength!.Value,
+                    UnknownBreakThreshold = _unknownBreakThreshold!.Value
                 });
                 Filter = new ThaiTextFilter(segmenter) { Enabled = _enabled.Value };
                 Logger.LogInfo($"โหลดพจนานุกรม {segmenter.WordCount} คำ จาก {wordListPath}");
@@ -66,7 +67,8 @@ namespace ThaiWrap.BepInEx
 
         private void Update()
         {
-            if (Filter != null && Filter.Enabled != _enabled.Value) Filter.Enabled = _enabled.Value;
+            if (Filter != null && _enabled != null && Filter.Enabled != _enabled.Value)
+                Filter.Enabled = _enabled.Value;
         }
 
         /// <summary>ค้นหา word list: ข้าง DLL ก่อน แล้วตามโฟลเดอร์ plugins ของ BepInEx</summary>
