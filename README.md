@@ -1,5 +1,7 @@
 # thaiwrap
 
+[![CI](https://github.com/AeyXD/thaiwrap/actions/workflows/ci.yml/badge.svg)](https://github.com/AeyXD/thaiwrap/actions/workflows/ci.yml)
+
 ทำให้ข้อความไทยในเกมตัดบรรทัดถูกจุด — โดยไม่ต้องแก้เกมเลย
 
 ภาษาไทยเขียนโดยไม่เว้นวรรคระหว่างคำ แต่เอนจินเกมส่วนใหญ่ (Unity, Unreal, ฯลฯ)

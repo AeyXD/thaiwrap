@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build (Release)
+        run: |
+          dotnet build src/ThaiWrap.Cli/ThaiWrap.Cli.csproj -c Release
+          dotnet build tests/ThaiWrap.Tests/ThaiWrap.Tests.csproj -c Release
+
+      # เทสเป็น console runner (ไม่ใช่ xunit) — exit code != 0 เมื่อมี check ใด fail
+      - name: Run test suite
+        run: dotnet run --project tests/ThaiWrap.Tests -c Release -- data/words_th.txt
+
+      - name: CLI smoke test
+        run: |
+          # csv dry-run ต้องจบด้วย exit 0 และมี diff ให้ดู
+          dotnet run --project src/ThaiWrap.Cli -c Release -- tests/samples/items.csv --columns thai --dry-run
+
+          # ประมวลผลจริงแล้วตรวจว่ามี ZWSP ในผลลัพธ์
+          dotnet run --project src/ThaiWrap.Cli -c Release -- tests/samples/dialogs.json -o /tmp/out.json
+          python3 - <<'EOF'
+          data = open('/tmp/out.json', encoding='utf-8').read()
+          assert '\u200b' in data, 'no ZWSP found in output'
+          assert '"name"' in data and '"desc"' in data, 'json structure lost'
+          print('smoke ok: ZWSP present, structure intact')
+          EOF
