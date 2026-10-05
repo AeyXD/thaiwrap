@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- net35 = รันได้กับ BepInEx 5 + Unity Mono ทุกรุ่น (runtime ย้อนหลัง compatible เสมอ) -->
+    <TargetFramework>net35</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>ThaiWrap.BepInEx</RootNamespace>
+    <AssemblyName>ThaiWrap.BepInEx</AssemblyName>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <DebugType>none</DebugType>
+    <!-- UnityEngine.Modules แนบ AssemblyInfo มาเอง — ปิดฝั่งเราเพื่อไม่ให้ attribute ซ้ำ
+         (เวอร์ชันของ plugin อ่านจาก [BepInPlugin] อยู่แล้ว) -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="UnityEngine.Modules" Version="2021.3.33" IncludeAssets="compile" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- BepInEx + Harmony DLL มาจาก tools/fetch-bepinex.sh (ไม่ commit ลง repo) -->
+  <ItemGroup>
+    <Reference Include="BepInEx">
+      <HintPath>../../lib/BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>../../lib/0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- รวม core ของ ThaiWrap เป็น source ลง DLL เดียว — ไม่มี dependency ภายนอกตอนรัน
+       (core เขียนด้วย API ที่มีใน net35 ทั้งหมด) -->
+  <ItemGroup>
+    <Compile Include="../ThaiWrap/**/*.cs"
+             Exclude="../ThaiWrap/obj/**/*.cs;../ThaiWrap/bin/**/*.cs"
+             Link="Core/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

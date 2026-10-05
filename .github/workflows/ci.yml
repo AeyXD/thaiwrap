@@ -23,6 +23,11 @@ jobs:
           dotnet build src/ThaiWrap.Cli/ThaiWrap.Cli.csproj -c Release
           dotnet build tests/ThaiWrap.Tests/ThaiWrap.Tests.csproj -c Release
 
+      - name: Build BepInEx plugin (net35)
+        run: |
+          ./tools/fetch-bepinex.sh
+          dotnet build src/ThaiWrap.BepInEx/ThaiWrap.BepInEx.csproj -c Release
+
       # เทสเป็น console runner (ไม่ใช่ xunit) — exit code != 0 เมื่อมี check ใด fail
       - name: Run test suite
         run: dotnet run --project tests/ThaiWrap.Tests -c Release -- data/words_th.txt

@@ -123,7 +123,7 @@ namespace ThaiWrap
         {
             if (clusters.Count == 0) return;
             if (clusters.Count <= _options.UnknownBreakThreshold)
-                tokens.Add(new Token(string.Concat(clusters), TokenKind.UnknownRun));
+                tokens.Add(new Token(clusters.Count == 1 ? clusters[0] : string.Concat(clusters.ToArray()), TokenKind.UnknownRun));
             else
                 foreach (var cl in clusters) tokens.Add(new Token(cl, TokenKind.Cluster));
             clusters.Clear();

@@ -12,6 +12,8 @@
   <ItemGroup>
     <ProjectReference Include="../../src/ThaiWrap/ThaiWrap.csproj" />
     <ProjectReference Include="../../src/ThaiWrap.Formats/ThaiWrap.Formats.csproj" />
+    <!-- ThaiTextFilter อยู่ในโปรเจกต์ plugin (net35) — link เป็น source มาทดสอบแบบไม่ผูก BepInEx -->
+    <Compile Include="../../src/ThaiWrap.BepInEx/ThaiTextFilter.cs" Link="BepInEx/ThaiTextFilter.cs" />
   </ItemGroup>
 
 </Project>

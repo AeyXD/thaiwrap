@@ -23,6 +23,7 @@ thaiwrap แก้ที่ตัวข้อความ: ตัดคำด้
 | CLI | `src/ThaiWrap.Cli` | dry-run diff, เลือกคอลัมน์, โหมด folder, BOM/CRLF |
 | Tests | `tests/ThaiWrap.Tests` | invariant checks + ชุดประโยคเกม 39 ประโยค |
 | เว็บทดสอบ visual | `web/` | จำลองเอนจินเกมด้วย canvas เทียบก่อน/หลัง + `font_probe.html` |
+| BepInEx plugin | `src/ThaiWrap.BepInEx` | hook TextMeshPro/UGUI ตอนรัน (net35, ไม่มี dependency) — แพ็กด้วย `tools/package-plugin.sh` |
 | Font patcher | `tools/font_zwsp_patch.py` | เติม glyph ZWSP เปล่าให้ฟอนต์ TrueType ที่ไม่มี |
 | Godot compat test | `tools/godot-compat/` | สคริปต์ทดสอบ headless รันซ้ำได้ |
 | Word list | `data/words_th.txt` | 62,107 คำ จาก [pythainlp](https://github.com/PyThaiNLP/pythainlp) (Apache-2.0) |

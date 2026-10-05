@@ -163,6 +163,32 @@ namespace ThaiWrap.Tests
             Check("kv: คำแปลถูกแปลง", kvOut.Contains(zw));
             Check("kv: คอมเมนต์ไม่ถูกแตะ", kvOut.Contains("# comment line"));
 
+            Console.WriteLine("== runtime filter (BepInEx hook logic) ==");
+            var filter = new ThaiWrap.BepInEx.ThaiTextFilter(seg) { Enabled = true };
+            string f1 = filter.Process("Hello World");
+            Check("filter: ข้อความไม่มีไทยผ่านเป๊ะ (fast reject)", f1 == "Hello World" && filter.SkippedCount == 1);
+            string f2 = filter.Process("นักเดินทางจากแดนไกล");
+            Check("filter: ข้อความไทยได้ ZWSP", f2.Contains(zw));
+            string f3 = filter.Process("นักเดินทางจากแดนไกล");
+            Check("filter: cache hit เมื่อ set ซ้ำ", f3 == f2 && filter.CacheHitCount == 1);
+            string f4 = filter.Process(f2);
+            Check("filter: idempotent (ป้อนข้อความที่มี ZWSP แล้ว)", f4 == f2);
+            filter.Enabled = false;
+            string f5 = filter.Process("ข้อความทดสอบใหม่");
+            Check("filter: Enabled=false = ผ่านตรง", f5 == "ข้อความทดสอบใหม่");
+            filter.Enabled = true;
+            // typewriter: เกมผลักข้อความทีละตัวทุกเฟรม — ทุก intermediate ต้อง valid และไม่พังเมื่อถึงเต็ม
+            string full = "เขาเดินเข้ามาในห้องโถงอย่างเงียบๆ";
+            string built = "";
+            bool typewriterOk = true;
+            for (int i = 1; i <= full.Length; i++)
+            {
+                built = filter.Process(full.Substring(0, i));
+                if (built.Replace(zw.ToString(), "") != full.Substring(0, i)) { typewriterOk = false; break; }
+            }
+            Check("filter: typewriter ทุกขั้น round-trip ถูก", typewriterOk, Show(built));
+            Check("filter: typewriter จบแล้วได้ ZWSP ครบ", built.Contains(zw));
+
             Console.WriteLine("== segmentation coverage ==");
             var allTokens = new List<Token>();
             foreach (var line in lines) allTokens.AddRange(seg.Tokenize(line));

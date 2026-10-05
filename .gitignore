@@ -9,3 +9,7 @@ obj/
 
 # ผลลัพธ์ที่สร้างระหว่างทำงาน
 *.bak
+
+# reference DLLs ที่โหลดผ่าน tools/fetch-bepinex.sh
+lib/
+dist/
