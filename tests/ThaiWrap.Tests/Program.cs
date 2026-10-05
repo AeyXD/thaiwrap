@@ -183,7 +183,7 @@ namespace ThaiWrap.Tests
             bool typewriterOk = true;
             for (int i = 1; i <= full.Length; i++)
             {
-                built = filter.Process(full.Substring(0, i));
+                built = filter.Process(full.Substring(0, i)) ?? "";
                 if (built.Replace(zw.ToString(), "") != full.Substring(0, i)) { typewriterOk = false; break; }
             }
             Check("filter: typewriter ทุกขั้น round-trip ถูก", typewriterOk, Show(built));

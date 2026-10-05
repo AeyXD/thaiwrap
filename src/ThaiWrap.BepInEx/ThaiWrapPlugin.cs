@@ -72,7 +72,7 @@ namespace ThaiWrap.BepInEx
         }
 
         /// <summary>ค้นหา word list: ข้าง DLL ก่อน แล้วตามโฟลเดอร์ plugins ของ BepInEx</summary>
-        private static string FindWordList()
+        private static string? FindWordList()
         {
             try
             {
@@ -131,7 +131,7 @@ namespace ThaiWrap.BepInEx
             {
                 var filter = Filter;
                 if (filter == null || !filter.Enabled) return;
-                __0 = filter.Process(__0);
+                __0 = filter.Process(__0) ?? __0;
             }
         }
     }

@@ -26,7 +26,7 @@ namespace ThaiWrap.BepInEx
             _cacheLimit = cacheLimit < 16 ? 16 : cacheLimit;
         }
 
-        public string Process(string value)
+        public string? Process(string? value)
         {
             if (!Enabled || value == null) return value;
             if (!ContainsThai(value)) { SkippedCount++; return value; }
