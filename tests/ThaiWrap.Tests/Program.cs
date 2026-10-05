@@ -1,0 +1,216 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using ThaiWrap;
+using ThaiWrap.Formats;
+
+namespace ThaiWrap.Tests
+{
+    public static class Program
+    {
+        private static int _failures;
+        private static int _checks;
+
+        private static void Check(string name, bool condition, string detail = "")
+        {
+            _checks++;
+            if (condition)
+            {
+                Console.WriteLine("  ok  " + name);
+            }
+            else
+            {
+                _failures++;
+                Console.WriteLine("FAIL  " + name + (detail.Length > 0 ? "  [" + detail + "]" : ""));
+            }
+        }
+
+        public static int Main(string[] args)
+        {
+            string wordList = args.Length > 0 ? args[0] : "data/words_th.txt";
+            if (!File.Exists(wordList)) { Console.Error.WriteLine("word list not found: " + wordList); return 2; }
+
+            var seg = ThaiSegmenter.FromFile(wordList);
+            var zw = '\u200B';
+
+            Console.WriteLine("== dictionary ==");
+            Check("word count > 50000", seg.WordCount > 50000, seg.WordCount.ToString());
+
+            Console.WriteLine("== invariants on all sample sentences ==");
+            string[] lines = File.ReadAllLines("samples/game_sentences.txt", Encoding.UTF8)
+                .Where(l => l.Trim().Length > 0).ToArray();
+            Check("sample set loaded (>= 35 sentences)", lines.Length >= 35, lines.Length.ToString());
+
+            bool roundTrip = true, noMarkBefore = true, noLeadingVowelAfter = true,
+                 noWsAdjacent = true, noEdgeZwsp = true, someInserted = false;
+            long insertedTotal = 0;
+            var edgeOffenders = new List<string>();
+            foreach (var line in lines)
+            {
+                string outText = seg.InsertZwsp(line);
+
+                if (outText.Replace(zw.ToString(), "") != line) roundTrip = false;
+                for (int i = 1; i < outText.Length; i++)
+                {
+                    char prev = outText[i - 1];
+                    char cur = outText[i];
+                    if (cur == zw)
+                    {
+                        insertedTotal++;
+                        char before = prev;
+                        char after = i + 1 < outText.Length ? outText[i + 1] : '\0';
+                        if (after != '\0' && (ThaiChars.IsCombiningMark(after) || ThaiChars.IsThaiPunctuation(after)
+                            || ThaiChars.IsWhitespace(after) || ThaiChars.NoBreakBefore(after)))
+                            noMarkBefore = false;
+                        if (ThaiChars.IsLeadingVowel(before)) noLeadingVowelAfter = false;
+                        if (ThaiChars.IsWhitespace(before)) noWsAdjacent = false;
+                    }
+                }
+                if (outText.StartsWith(zw.ToString(), StringComparison.Ordinal) ||
+                    outText.EndsWith(zw.ToString(), StringComparison.Ordinal))
+                {
+                    noEdgeZwsp = false;
+                    edgeOffenders.Add(Show(outText));
+                }
+                if (outText.Contains(zw)) someInserted = true;
+            }
+            Check("round-trip: stripping ZWSP restores original", roundTrip);
+            Check("no ZWSP before combining marks / ๆ ฯ / whitespace / closing punct", noMarkBefore);
+            Check("no ZWSP after leading vowels เ แ โ ใ ไ", noLeadingVowelAfter);
+            Check("no ZWSP adjacent to existing whitespace", noWsAdjacent);
+            Check("no ZWSP at string start/end", noEdgeZwsp, string.Join(" // ", edgeOffenders));
+            Check("ZWSP actually inserted somewhere", someInserted, "inserted=" + insertedTotal);
+
+            Console.WriteLine("== specific cases ==");
+            string t1 = seg.InsertZwsp("นักเดินทางจากแดนไกล เจ้ามาถึงหมู่บ้านแห่งนี้เพื่อเหตุใด");
+            Check("Thai words get break points between them", t1.Count(ch => ch == zw) >= 8, Show(t1));
+            Check("no break inside '25' or before '%'", !t1.Contains("25" + zw) && !t1.Contains(zw + "%"), Show(t1));
+
+            string t2 = seg.InsertZwsp("กดปุ่ม A เพื่อโจมตี");
+            Check("latin token 'A' intact", t2.Contains("A") && !t2.Contains(zw + "A") && !t2.Contains("A" + zw), Show(t2));
+
+            string t3 = seg.InsertZwsp("Hello World");
+            Check("pure latin unchanged", t3 == "Hello World", Show(t3));
+
+            string t4 = seg.InsertZwsp("");
+            Check("empty string ok", t4 == "");
+
+            // Long unknown run (gibberish name) must get cluster break points; short one must not.
+            string longName = "กวุณโณตลฑฆฑพฌชฬฐซึืูเฌฎโณฒฒฒ"; // no dictionary words here
+            string t5 = seg.InsertZwsp(longName);
+            Check("long unknown run is breakable", t5.Contains(zw), Show(t5));
+            string shortName = "ฬฌฅญฐฎ";
+            string t6 = seg.InsertZwsp(shortName);
+            Check("short unknown run stays atomic", !t6.Contains(zw), Show(t6));
+
+            string t7 = seg.InsertZwsp("เขาเดินเข้ามาอย่างเงียบๆ ไม่พูดอะไรสักคำ");
+            Check("ไม่ตัดก่อน ๆ (mai yamok)", !t7.Contains(zw + "ๆ"), Show(t7));
+
+            string t8 = seg.InsertZwsp("บอส: มังกรเพลิงคราม (ระดับ S)");
+            Check("no break after '(' or before ')'", !t8.Contains("(" + zw) && !t8.Contains(zw + ")"), Show(t8));
+
+            string t9 = seg.InsertZwsp("โหมดยาก: ศัตรูแข็งแกร่งขึ้น 50% และไอเทมฟื้นฟูหายากขึ้น");
+            Check("dialogue with colon/percent passes invariants",
+                t9.Replace(zw.ToString(), "") == "โหมดยาก: ศัตรูแข็งแกร่งขึ้น 50% และไอเทมฟื้นฟูหายากขึ้น" && !t9.Contains(zw + ":"),
+                Show(t9));
+
+            // newline preservation
+            string t10 = seg.InsertZwsp("บรรทัดที่หนึ่ง\nบรรทัดที่สอง");
+            Check("newlines preserved", t10.Contains('\n') && !t10.Contains(zw + "\n") && !t10.Contains("\n" + zw), Show(t10));
+
+            Console.WriteLine("== formats: csv ==");
+            string csv = File.ReadAllText("tests/samples/items.csv", Encoding.UTF8);
+            var table0 = CsvProcessor.ParseTable(csv, ',');
+            string csvOut = CsvProcessor.Process(csv,
+                new CsvOptions { ColumnNames = new List<string> { "thai" } },
+                s => seg.InsertZwsp(s));
+            var table1 = CsvProcessor.ParseTable(csvOut, ',');
+            Check("csv: จำนวนแถวคงเดิม", table1.Count == table0.Count, table1.Count.ToString());
+            Check("csv: คอลัมน์ key ไม่ถูกแตะ", Enumerable.SequenceEqual(
+                table0.Select(r => r[0]), table1.Select(r => r[0])));
+            Check("csv: คอลัมน์ en ไม่ถูกแตะ", Enumerable.SequenceEqual(
+                table0.Select(r => r[2]), table1.Select(r => r[2])));
+            Check("csv: คอลัมน์ thai ถูกแปลง", table1.Skip(1).All(r => r[1].Contains(zw)));
+            Check("csv: แถว header ไม่ถูกแตะ (โหมดเลือกตามชื่อ)", table1[0][1] == "thai");
+            Check("csv: CRLF ถูกรักษาไว้", csvOut.Contains("\r\n"));
+            Check("csv: ฟิลด์มี comma ยัง parse ถูก (คงเป็นฟิลด์เดียว)",
+                table1[3][1].Replace(zw.ToString(), "") == "เกราะหนังมังกร, ค่าป้องกันสูง", table1[3][1]);
+
+            Console.WriteLine("== formats: json ==");
+            string json = File.ReadAllText("tests/samples/dialogs.json", Encoding.UTF8);
+            string jsonOut = JsonStringProcessor.Process(json, s => seg.InsertZwsp(s));
+            Check("json: keys byte-identical", ExtractJsonKeys(json) == ExtractJsonKeys(jsonOut));
+            Check("json: ค่า latin ไม่ถูกแตะ", jsonOut.Contains("\"Sword of Dawn\"") == json.Contains("\"Sword of Dawn\""));
+            Check("json: ค่าไทยถูกแปลง", jsonOut.Contains(zw));
+            Check("json: ค่าที่ escape \\\\uXXXX ถูก decode+แปลงถูก", jsonOut.Contains("นักเดินทาง" + zw));
+            Check("json: โครงสร้างยัง valid (สแกนซ้ำไม่พัง)",
+                JsonStringProcessor.Process(jsonOut, s => s) == jsonOut);
+
+            Console.WriteLine("== formats: po ==");
+            string po = File.ReadAllText("tests/samples/messages.po", Encoding.UTF8);
+            string poOut = PoProcessor.Process(po, s => seg.InsertZwsp(s));
+            Check("po: บรรทัด msgid ไม่ถูกแตะ", LinesWith(poOut, "msgid ") == LinesWith(po, "msgid "));
+            Check("po: header entry ไม่ถูกแตะ", poOut.Contains("Content-Type"));
+            Check("po: msgstr ถูกแปลง", poOut.Contains(zw));
+            Check("po: obsolete (#~) ไม่ถูกแตะ", poOut.Contains("#~ msgstr"));
+
+            Console.WriteLine("== formats: keyvalue ==");
+            string kv = File.ReadAllText("tests/samples/autotr.txt", Encoding.UTF8);
+            string kvOut = KeyValueProcessor.Process(kv, s => seg.InsertZwsp(s));
+            Check("kv: key ไม่ถูกแตะ", kvOut.Split('\n').Any(l => l.TrimEnd().StartsWith("You found a sword.=")));
+            Check("kv: คำแปลถูกแปลง", kvOut.Contains(zw));
+            Check("kv: คอมเมนต์ไม่ถูกแตะ", kvOut.Contains("# comment line"));
+
+            Console.WriteLine("== segmentation coverage ==");
+            var allTokens = new List<Token>();
+            foreach (var line in lines) allTokens.AddRange(seg.Tokenize(line));
+            int thaiChars = allTokens.Sum(t => t.Text.Count(ThaiChars.IsThaiRange));
+            int dictChars = allTokens.Where(t => t.Kind == TokenKind.DictionaryWord)
+                .Sum(t => t.Text.Count(ThaiChars.IsThaiRange));
+            int unknownRuns = allTokens.Count(t => t.Kind == TokenKind.UnknownRun || t.Kind == TokenKind.Cluster);
+            Console.WriteLine("  Thai chars: " + thaiChars + ", covered by dictionary words: " +
+                dictChars + " (" + (100.0 * dictChars / thaiChars).ToString("F1") + "%), unknown runs: " + unknownRuns);
+
+            Console.WriteLine();
+            Console.WriteLine("== segmentation preview (first 12 sentences) ==");
+            foreach (var line in lines.Take(12))
+                Console.WriteLine("  " + seg.SegmentToString(line));
+
+            Console.WriteLine();
+            Console.WriteLine(_failures == 0
+                ? "ALL " + _checks + " CHECKS PASSED"
+                : _failures + " / " + _checks + " CHECKS FAILED");
+            return _failures == 0 ? 0 : 1;
+        }
+
+        private static string Show(string s) => s.Replace('\u200B', '·');
+
+        /// <summary>ดึง string literal ทุกตัวที่เป็น key (ตามด้วย ':') แบบ raw — ใช้เทียบว่า keys ไม่ถูกแตะ</summary>
+        private static string ExtractJsonKeys(string json)
+        {
+            var sb = new StringBuilder();
+            int i = 0, n = json.Length;
+            while (i < n)
+            {
+                if (json[i] != '"') { i++; continue; }
+                int start = i;
+                i++;
+                while (i < n)
+                {
+                    if (json[i] == '\\') { i += 2; continue; }
+                    if (json[i] == '"') { i++; break; }
+                    i++;
+                }
+                int j = i;
+                while (j < n && (json[j] == ' ' || json[j] == '\t' || json[j] == '\r' || json[j] == '\n')) j++;
+                if (j < n && json[j] == ':') sb.Append(json, start, i - start).Append(';');
+            }
+            return sb.ToString();
+        }
+
+        private static int LinesWith(string s, string prefix) =>
+            s.Split('\n').Count(l => l.TrimStart().StartsWith(prefix));
+    }
+}

@@ -1,0 +1,20 @@
+msgid ""
+msgstr ""
+"Language: th\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "You found a sword."
+msgstr "เจ้าพบดาบหนึ่งเล่ม"
+
+msgid "The traveler comes from a far land"
+msgstr ""
+"นักเดินทางจากแดนไกลเดินทางมาถึง "
+"หมู่บ้านแห่งนี้ในยามค่ำคืน"
+
+msgid "%d enemies defeated"
+msgid_plural "%d enemies defeated"
+msgstr[0] "เอาชนะศัตรูได้ %d ตัว"
+msgstr[1] "เอาชนะศัตรูได้ %d ตัว"
+
+#~ msgid "Old string"
+#~ msgstr "ข้อความเก่า"

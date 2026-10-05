@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>thaiwrap — ทดสอบการตัดบรรทัดภาษาไทยแบบเอนจินเกม</title>
+<style>
+  :root {
+    --bg: #14161c; --panel: #1d2028; --border: #2e3340;
+    --text: #e8e6e0; --muted: #8b8f9c; --accent: #f0b429; --good: #4cc38a; --bad: #ef5350;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Sarabun", "Thonburi", "Noto Sans Thai", -apple-system, sans-serif;
+    line-height: 1.6; padding: 24px;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h1 .tag { color: var(--accent); font-size: 14px; font-weight: normal; }
+  .sub { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+  .layout { display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: start; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+  textarea {
+    width: 100%; height: 110px; background: #12141a; color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-size: 16px;
+    font-family: inherit; resize: vertical;
+  }
+  select, input[type="range"] { width: 100%; }
+  select {
+    background: #12141a; color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px; font-family: inherit;
+  }
+  .val { color: var(--accent); font-variant-numeric: tabular-nums; }
+  .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .panel-title { font-size: 14px; margin-bottom: 8px; }
+  .panel-title .badge {
+    font-size: 12px; padding: 1px 8px; border-radius: 99px; margin-left: 6px; vertical-align: 1px;
+  }
+  .badge.bad { background: rgba(239,83,80,.15); color: var(--bad); }
+  .badge.good { background: rgba(76,195,138,.15); color: var(--good); }
+  canvas { border-radius: 8px; display: block; }
+  .legend { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .legend .r { color: var(--bad); }
+  .stats { font-size: 13px; color: var(--muted); margin-top: 10px; }
+  .stats b { color: var(--text); }
+  .seg-view {
+    margin-top: 8px; font-size: 15px; word-break: keep-all; line-height: 2;
+  }
+  .seg-view .w { background: rgba(240,180,41,.12); border-radius: 4px; padding: 0 1px; }
+  .seg-view .u { background: rgba(239,83,80,.15); border-radius: 4px; padding: 0 1px; }
+  .browser-check { margin-top: 20px; }
+  .browser-boxes { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 8px; }
+  .browser-box {
+    border: 1px dashed var(--border); border-radius: 8px; padding: 12px; font-size: 19px;
+    white-space: pre-wrap;
+  }
+  details summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+  .note { font-size: 13px; color: var(--muted); margin-top: 8px; }
+</style>
+</head>
+<body>
+<h1>thaiwrap <span class="tag">Phase 0 — ทดสอบการตัดบรรทัดภาษาไทย</span></h1>
+<div class="sub">
+  แผงซ้าย/ขวาคือการจำลองเอนจินเกมที่ตัดบรรทัดที่ "ช่องว่าง" เท่านั้น (เหมือน Unity/Unreal ส่วนใหญ่ก่อนแก้)
+  — ขวาคือข้อความเดียวกันหลังแทรก ZWSP ด้วยตัวตัดคำของ thaiwrap
+</div>
+
+<div class="layout">
+  <div class="card">
+    <label>ข้อความทดสอบ</label>
+    <textarea id="input"></textarea>
+
+    <label>ตัวอย่างจากเกม</label>
+    <select id="sample"></select>
+
+    <label>ความกว้างกล่องข้อความ: <span class="val" id="wval">320</span>px</label>
+    <input type="range" id="width" min="160" max="720" value="320" step="10">
+
+    <label>ขนาดฟอนต์: <span class="val" id="fsval">20</span>px</label>
+    <input type="range" id="fontsize" min="14" max="28" value="20" step="1">
+
+    <label>ฟอนต์</label>
+    <select id="font">
+      <option value='"Thonburi"'>Thonburi (ระบบ)</option>
+      <option value='"Sarabun"'>Sarabun (ถ้าติดตั้ง)</option>
+      <option value='"Noto Sans Thai"'>Noto Sans Thai</option>
+      <option value='-apple-system, sans-serif'>System</option>
+    </select>
+
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <div>
+    <div class="panels">
+      <div class="card">
+        <div class="panel-title">ไม่มี ZWSP <span class="badge bad">สภาพเกมทั่วไป</span></div>
+        <canvas id="plain" width="340"></canvas>
+        <div class="legend">ตัวอักษร<span class="r">สีแดง</span> = ถูกตัดกลางคำเพราะเอนจินไม่เจอจุดตัด</div>
+        <div class="stats" id="plainStats"></div>
+      </div>
+      <div class="card">
+        <div class="panel-title">มี ZWSP <span class="badge good">หลังใช้ thaiwrap</span></div>
+        <canvas id="wrapped" width="340"></canvas>
+        <div class="legend">ตัดเฉพาะรอยต่อระหว่างคำจากพจนานุกรม</div>
+        <div class="stats" id="wrappedStats"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="panel-title">ผลการตัดคำ</div>
+      <div class="seg-view" id="segview"></div>
+    </div>
+
+    <details class="browser-check">
+      <summary>ตรวจกับ text stack จริง (เบราว์เซอร์/ICU) — ขยายเพื่อดู</summary>
+      <div class="browser-boxes">
+        <div>
+          <div class="panel-title">ไม่มี ZWSP — เบราว์เซอร์ตัดเองด้วย ICU</div>
+          <div class="browser-box" id="browserPlain"></div>
+        </div>
+        <div>
+          <div class="panel-title">มี ZWSP — เบราว์เซอร์เคารพ ZWSP เป็นจุดตัด</div>
+          <div class="browser-box" id="browserWrapped"></div>
+        </div>
+      </div>
+      <div class="note">
+        หมายเหตุ: เบราว์เซอร์มีการตัดคำไทยในตัว (ICU) จึงตัดได้ดีอยู่แล้วทั้งสองกล่อง —
+        จุดสำคัญคือกล่องขวายังคงเคารพ ZWSP ที่เราแทรก แปลว่าเทคนิคนี้ใช้ได้กับ stack ที่รองรับ ZWSP
+        ส่วนเอนจินเกมที่ตัดที่ช่องว่างเท่านั้น ให้ดูผลในแผง canvas ด้านบน
+      </div>
+    </details>
+  </div>
+</div>
+
+<script src="words.js"></script>
+<script src="thaiwrap.js"></script>
+<script>
+'use strict';
+
+const SAMPLES = [
+  'ความเสียหายกายภาพเพิ่มขึ้น 25% เป็นเวลา 30 วินาที',
+  'นักเดินทางจากแดนไกล เจ้ามาถึงหมู่บ้านแห่งนี้เพื่อเหตุใด',
+  'ข้าได้ยินมาว่าป่าตะวันตกมีสัตว์ร้ายอาละวาด ชาวบ้านไม่กล้าเข้าป่ามาหลายวันแล้ว',
+  'ในยุคสมัยอันวุ่นวาย เมื่ออาณาจักรทั้งเจ็ดต่างแย่งชิงอำนาจกัน วีรบุรุษผู้หนึ่งได้ออกเดินทางจากบ้านเกิดเพื่อค้นหาความจริงที่ซ่อนอยู่เบื้องหลังสงครามครั้งใหญ่',
+  'คุณแน่ใจหรือไม่ว่าต้องการลบไฟล์เซฟนี้ การกระทำดังกล่าวไม่สามารถย้อนกลับได้',
+  'ดาบเพลิงพสุธา ปลดปล่อยพลังแห่งเพลิงใส่ศัตรูทั้งหมดในรัศมี 5 เมตร',
+  'มิธิล ราชินีแห่งน้ำแข็ง ถือครองพลังแห่งฤดูหนาวบทสรุป',
+  'เรือนำของกองทัพเรือถูกพายุโหมกระหน่ำจนอับปางลงกลางมหาสมุทร',
+];
+
+const $ = id => document.getElementById(id);
+const segmenter = new ThaiSegmenter(window.THAI_WORDS, {});
+
+const sampleSel = $('sample');
+SAMPLES.forEach((s, i) => {
+  const opt = document.createElement('option');
+  opt.value = i; opt.textContent = s.slice(0, 42) + (s.length > 42 ? '…' : '');
+  sampleSel.appendChild(opt);
+});
+$('input').value = SAMPLES[1];
+sampleSel.addEventListener('change', () => { $('input').value = SAMPLES[sampleSel.value]; render(); });
+
+function drawPanel(canvasId, text, width, font, fontSize) {
+  const canvas = $(canvasId);
+  const dpr = window.devicePixelRatio || 1;
+  const pad = 14;
+  canvas.width = (width + pad * 2) * dpr;
+  canvas.style.width = (width + pad * 2) + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.font = fontSize + 'px ' + font;
+
+  const lineHeight = Math.round(fontSize * 1.7);
+  const { lines, hardCuts } = simulateEngineWrap(ctx, text, width);
+
+  const boxH = lines.length * lineHeight + pad * 2;
+  canvas.height = (boxH + 10) * dpr;
+  canvas.style.height = (boxH + 10) + 'px';
+  ctx.scale(dpr, dpr); // re-apply after resize resets transform
+  ctx.font = fontSize + 'px ' + font;
+
+  // dialog box background
+  ctx.fillStyle = '#101218';
+  ctx.strokeStyle = '#3a4152';
+  ctx.lineWidth = 2;
+  const r = 10, W = width + pad * 2, H = boxH;
+  ctx.beginPath();
+  ctx.moveTo(r, 0); ctx.arcTo(W, 0, W, H, r); ctx.arcTo(W, H, 0, H, r);
+  ctx.arcTo(0, H, 0, 0, r); ctx.arcTo(0, 0, W, 0, r); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+
+  ctx.textBaseline = 'top';
+  let y = pad;
+  for (const line of lines) {
+    let x = pad;
+    for (const seg of line.segments) {
+      ctx.fillStyle = seg.hard ? '#ef5350' : '#e8e6e0';
+      ctx.fillText(seg.t, x, y);
+      x += ctx.measureText(seg.t).width;
+    }
+    y += lineHeight;
+  }
+  return { lines: lines.length, hardCuts };
+}
+
+function render() {
+  const text = $('input').value || '';
+  const width = +$('width').value;
+  const fontSize = +$('fontsize').value;
+  const font = $('font').value;
+  $('wval').textContent = width;
+  $('fsval').textContent = fontSize;
+
+  const wrapped = segmenter.insertZwsp(text);
+
+  const a = drawPanel('plain', text, width, font, fontSize);
+  const b = drawPanel('wrapped', wrapped, width, font, fontSize);
+
+  $('plainStats').innerHTML = 'จำนวนบรรทัด <b>' + a.lines + '</b> · ถูกตัดกลางคำ <b style="color:var(--bad)">' + a.hardCuts + '</b> จุด';
+  $('wrappedStats').innerHTML = 'จำนวนบรรทัด <b>' + b.lines + '</b> · ถูกตัดกลางคำ <b style="color:' + (b.hardCuts ? 'var(--bad)' : 'var(--good)') + '">' + b.hardCuts + '</b> จุด';
+
+  // segmentation report
+  const tokens = segmenter.tokenize(text);
+  const zwCount = (wrapped.match(/\u200B/g) || []).length;
+  let html = '';
+  for (const t of tokens) {
+    if (t.kind === 'Whitespace') { html += t.text; continue; }
+    const cls = (t.kind === 'UnknownRun' || t.kind === 'Cluster') ? 'u' : 'w';
+    html += '<span class="' + cls + '">' + t.text + '</span> ';
+  }
+  $('segview').innerHTML = html;
+  const unknown = tokens.filter(t => t.kind === 'UnknownRun' || t.kind === 'Cluster').length;
+  const words = tokens.filter(t => t.kind === 'DictionaryWord').length;
+  $('stats').innerHTML =
+    'คำจากพจนานุกรม <b>' + words + '</b> · ช่วงไม่รู้จัก <b>' + unknown + '</b> ' +
+    '<span style="color:var(--muted)">(แถบสีแดงในผลการตัดคำ)</span><br>' +
+    'ZWSP ที่แทรก <b>' + zwCount + '</b> จุด · พจนานุกรม <b>' + segmenter.words.size.toLocaleString() + '</b> คำ';
+
+  $('browserPlain').textContent = text;
+  $('browserWrapped').textContent = wrapped;
+}
+
+['input', 'width', 'fontsize', 'font'].forEach(id => {
+  $(id).addEventListener('input', render);
+  $(id).addEventListener('change', render);
+});
+render();
+</script>
+</body>
+</html>

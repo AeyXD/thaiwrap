@@ -1,0 +1,4 @@
+# comment line
+You found a sword.=เจ้าพบดาบหนึ่งเล่ม
+The traveler comes from a far land=นักเดินทางจากแดนไกลมาถึงหมู่บ้านนี้
+Cancel=ยกเลิก

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>ThaiWrap.Formats</RootNamespace>
+    <Description>Line-safe processors for translation file formats (csv/json/po/key=value)</Description>
+  </PropertyGroup>
+
+</Project>

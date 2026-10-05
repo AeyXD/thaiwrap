@@ -1,0 +1,11 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+
+# macOS
+.DS_Store
+
+# ผลลัพธ์ที่สร้างระหว่างทำงาน
+*.bak

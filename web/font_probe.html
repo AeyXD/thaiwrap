@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="th">
+<head><meta charset="utf-8"><title>thaiwrap font probe</title></head>
+<body style="font-family: sans-serif">
+<h3>Font probe — ZWSP ใน canvas</h3>
+<pre id="result">กำลังทดสอบ…</pre>
+<script>
+'use strict';
+function loadFont(family, url) {
+  var f = new FontFace(family, url);
+  return f.load().then(function (ff) { document.fonts.add(ff); });
+}
+function probe(ctx, family) {
+  ctx.font = '20px ' + family;
+  var zwspWidth = ctx.measureText('\u200B').width;
+  var thaiWidth = ctx.measureText('ทดสอบ').width;
+  ctx.clearRect(0, 0, 60, 60);
+  ctx.fillStyle = '#000';
+  ctx.fillText('\u200B', 10, 40);
+  var d = ctx.getImageData(0, 0, 60, 60).data;
+  var ink = 0;
+  for (var i = 3; i < d.length; i += 4) if (d[i] > 0) ink++;
+  return { family: family, zwspWidth: zwspWidth, thaiWidth: thaiWidth, zwspInkPixels: ink };
+}
+loadFont('SarabunOrig', 'url(http://127.0.0.1:8741/fonts/Sarabun-Regular.ttf)')
+  .then(function () { return loadFont('SarabunZwsp', 'url(http://127.0.0.1:8741/fonts/Sarabun-Regular-zwsp.ttf)'); })
+  .then(function () {
+    var c = document.createElement('canvas');
+    c.width = 60; c.height = 60;
+    var ctx = c.getContext('2d', { willReadFrequently: true });
+    var rows = [probe(ctx, 'SarabunOrig'), probe(ctx, 'SarabunZwsp')];
+    var lines = rows.map(function (r) {
+      return r.family + ': zwspWidth=' + r.zwspWidth + ' thaiWidth=' + r.thaiWidth +
+        ' zwspInkPixels=' + r.zwspInkPixels + (r.zwspInkPixels > 0 ? '  ← มีหมึก!' : '  (มองไม่เห็น)');
+    });
+    document.getElementById('result').textContent = 'DONE\n' + lines.join('\n');
+  })
+  .catch(function (e) { document.getElementById('result').textContent = 'ERROR: ' + e; });
+</script>
+</body>
+</html>
