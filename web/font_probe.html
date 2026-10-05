@@ -22,8 +22,8 @@ function probe(ctx, family) {
   for (var i = 3; i < d.length; i += 4) if (d[i] > 0) ink++;
   return { family: family, zwspWidth: zwspWidth, thaiWidth: thaiWidth, zwspInkPixels: ink };
 }
-loadFont('SarabunOrig', 'url(http://127.0.0.1:8741/fonts/Sarabun-Regular.ttf)')
-  .then(function () { return loadFont('SarabunZwsp', 'url(http://127.0.0.1:8741/fonts/Sarabun-Regular-zwsp.ttf)'); })
+loadFont('SarabunOrig', 'url(fonts/Sarabun-Regular.ttf)')
+  .then(function () { return loadFont('SarabunZwsp', 'url(fonts/Sarabun-Regular-zwsp.ttf)'); })
   .then(function () {
     var c = document.createElement('canvas');
     c.width = 60; c.height = 60;

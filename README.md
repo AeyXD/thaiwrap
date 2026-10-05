@@ -49,6 +49,10 @@ Options หลัก: `-f auto|text|csv|tsv|json|po|keyvalue` · `--columns "1,3
 
 ## เว็บทดสอบ visual
 
+**Demo ออนไลน์: https://aeyxd.github.io/thaiwrap/**
+
+หรือรัน local:
+
 ```bash
 cd web && python3 -m http.server 8741
 # เปิด http://127.0.0.1:8741/
