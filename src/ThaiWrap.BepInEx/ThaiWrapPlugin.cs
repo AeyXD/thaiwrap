@@ -16,8 +16,8 @@ namespace ThaiWrap.BepInEx
         public const string PluginName = "ThaiWrap";
         public const string PluginVersion = "0.3.0";
 
-        internal static ThaiTextFilter Filter;
-        internal static ManualLogSource Log;
+        internal static ThaiTextFilter? Filter;
+        internal static ManualLogSource? Log;
 
         // ถูก bind ใน Awake() ตาม pattern ของ BepInEx — ไม่ใช่ใน constructor
         private ConfigEntry<bool>? _enabled;
@@ -119,7 +119,7 @@ namespace ThaiWrap.BepInEx
             foreach (var method in targets)
             {
                 try { harmony.Patch(method, prefix: prefix); }
-                catch (Exception ex) { Log.LogWarning($"patch {method.DeclaringType?.Name}.set_text ไม่สำเร็จ: {ex.Message}"); }
+                catch (Exception ex) { Log?.LogWarning($"patch {method.DeclaringType?.Name}.set_text ไม่สำเร็จ: {ex.Message}"); }
             }
             return targets.Count;
         }
