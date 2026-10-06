@@ -173,22 +173,32 @@ class ThaiSegmenter {
     }
     let i = 0;
     while (i < chunk.length) {
-      let j = i + 1;
-      while (j < chunk.length && ThaiChars.isCombiningMark(chunk[j])) j++;
-      if (j < chunk.length && ThaiChars.isThaiPunctuation(chunk[j])) j++;
+      const j = this._clusterEnd(chunk, i);
       tokens.push({ text: chunk.slice(i, j), kind: TokenKind.Cluster });
       i = j;
     }
   }
 
+  // กฎขอบเขตเดียวกับ DP — mirror ของ C# ClusterEnd
+  _clusterEnd(s, i) {
+    let j = i + 1;
+    let extended = true;
+    while (extended) {
+      extended = false;
+      while (j < s.length && (ThaiChars.isCombiningMark(s[j]) || ThaiChars.noBreakBeforeSegment(s[j]))) j++;
+      if (j < s.length && ThaiChars.isLeadingVowel(s[j - 1])) {
+        j++;
+        extended = true;
+      }
+    }
+    return j;
+  }
+
   _countClusters(s) {
     let count = 0, i = 0;
     while (i < s.length) {
-      let j = i + 1;
-      while (j < s.length && ThaiChars.isCombiningMark(s[j])) j++;
-      if (j < s.length && ThaiChars.isThaiPunctuation(s[j])) j++;
+      i = this._clusterEnd(s, i);
       count++;
-      i = j;
     }
     return count;
   }

@@ -19,4 +19,9 @@
     <ProjectReference Include="../ThaiWrap.Formats/ThaiWrap.Formats.csproj" />
   </ItemGroup>
 
+  <!-- แนบพจนานุกรมติดตัว exe → publish ได้ zip ที่รันได้เลยจริงๆ -->
+  <ItemGroup>
+    <None Include="../../data/words_th.txt" Link="data/words_th.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

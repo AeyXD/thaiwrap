@@ -217,12 +217,32 @@ namespace ThaiWrap
             int i = 0;
             while (i < chunk.Length)
             {
-                int j = i + 1;
-                while (j < chunk.Length && ThaiChars.IsCombiningMark(chunk[j])) j++;
-                if (j < chunk.Length && ThaiChars.IsThaiPunctuation(chunk[j])) j++;
+                int j = ClusterEnd(chunk, i);
                 tokens.Add(new Token(chunk.Substring(i, j - i), TokenKind.Cluster));
                 i = j;
             }
+        }
+
+        /// <summary>
+        /// จุดจบ cluster ที่ตำแหน่ง i — ใช้กฎขอบเขตเดียวกับ DP: อักขระที่เปิด segment ใหม่ไม่ได้
+        /// (สระจ่อย วรรณยุกต์ ๆ ฯ ะ า ำ) ติดกับ cluster ก่อนหน้าเสมอ และถ้า cluster จบที่สระหน้า
+        /// (เ แ โ ใ ไ) ต้องกลืนพยัญชนะถัดไปด้วย ไม่ให้สระหน้าค้างท้ายชิ้น
+        /// </summary>
+        private static int ClusterEnd(string s, int i)
+        {
+            int j = i + 1;
+            bool extended = true;
+            while (extended)
+            {
+                extended = false;
+                while (j < s.Length && (ThaiChars.IsCombiningMark(s[j]) || ThaiChars.NoBreakBeforeSegment(s[j]))) j++;
+                if (j < s.Length && ThaiChars.IsLeadingVowel(s[j - 1]))
+                {
+                    j++;
+                    extended = true;
+                }
+            }
+            return j;
         }
 
         private static int CountClusters(string s)
@@ -230,11 +250,8 @@ namespace ThaiWrap
             int count = 0, i = 0;
             while (i < s.Length)
             {
-                int j = i + 1;
-                while (j < s.Length && ThaiChars.IsCombiningMark(s[j])) j++;
-                if (j < s.Length && ThaiChars.IsThaiPunctuation(s[j])) j++;
+                i = ClusterEnd(s, i);
                 count++;
-                i = j;
             }
             return count;
         }

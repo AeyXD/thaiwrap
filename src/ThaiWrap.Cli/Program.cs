@@ -15,6 +15,7 @@ namespace ThaiWrap.Cli
             public string? InputPath;
             public string? OutputPath;
             public string WordList = "data/words_th.txt";
+            public bool WordsExplicit;
             public string Mode = "zwsp"; // zwsp | sep
             public string Format = "auto";
             public string? Columns;
@@ -48,9 +49,10 @@ namespace ThaiWrap.Cli
                 return 2;
             }
 
+            cfg.WordList = ResolveWordList(cfg);
             if (!File.Exists(cfg.WordList))
             {
-                Console.Error.WriteLine("ไม่พบ word list: " + cfg.WordList + " (ใช้ --words <path>)");
+                Console.Error.WriteLine("ไม่พบ word list: " + cfg.WordList + " (ใช้ --words <path> หรือวาง data/words_th.txt ข้าง executable)");
                 return 2;
             }
             var segmenter = ThaiSegmenter.FromFile(cfg.WordList, cfg.Options);
@@ -86,7 +88,7 @@ namespace ThaiWrap.Cli
                     case "--out":
                     case "-o": cfg.OutputPath = Val(args, ref i); break;
                     case "--words":
-                    case "-w": cfg.WordList = Val(args, ref i); break;
+                    case "-w": cfg.WordList = Val(args, ref i); cfg.WordsExplicit = true; break;
                     case "--mode":
                     case "-m": cfg.Mode = Val(args, ref i); break;
                     case "--format":
@@ -128,6 +130,27 @@ namespace ThaiWrap.Cli
             return args[++i];
         }
 
+        /// <summary>
+        /// หา word list: ถ้าผู้ใช้ระบุ -w ใช้ตามนั้น · default จะลอง working directory
+        /// ก่อน แล้วตามตำแหน่งของ executable (data/words_th.txt และ words_th.txt)
+        /// เพื่อให้ zip ที่แจก "แตกแล้วรันได้เลย" ทำงานแม้เรียกจากโฟลเดอร์อื่น
+        /// </summary>
+        private static string ResolveWordList(Config cfg)
+        {
+            if (cfg.WordsExplicit) return cfg.WordList;
+            if (File.Exists(cfg.WordList)) return cfg.WordList; // working directory
+
+            string exeDir = AppContext.BaseDirectory;
+            string[] candidates =
+            {
+                Path.Combine(exeDir, "data", "words_th.txt"),
+                Path.Combine(exeDir, "words_th.txt"),
+            };
+            foreach (string c in candidates)
+                if (File.Exists(c)) return c;
+            return cfg.WordList; // คืน default เพื่อให้ error message ชี้ตำแหน่งเดิม
+        }
+
         private static void ValidateFormat(string f)
         {
             string[] valid = { "auto", "text", "csv", "tsv", "json", "po", "keyvalue" };
@@ -157,7 +180,7 @@ namespace ThaiWrap.Cli
             }
 
             Console.Error.WriteLine("---");
-            Console.Error.WriteLine($"ไฟล์ทั้งหมด {totals.Files} · เปลี่ยน {totals.ChangedFiles} · บรรทัดที่เปลี่ยน {totals.ChangedLines} · ZWSP ที่แทรก {totals.ZwspInserted}");
+            Console.Error.WriteLine($"ไฟล์ทั้งหมด {totals.Files} · เปลี่ยน {totals.ChangedFiles} · บรรทัดที่เปลี่ยน {totals.ChangedLines} · จุดตัดที่แทรก {totals.ZwspInserted}");
             return 0;
         }
 
@@ -175,13 +198,14 @@ namespace ThaiWrap.Cli
             string output = ProcessContent(input, format, cfg, transform);
 
             bool changed = output != input;
-            long inserted = CountZwsp(output) - CountZwsp(input);
+            char brk = cfg.Options.BreakChar;
+            long inserted = CountBreak(output, brk) - CountBreak(input, brk);
             if (changed) { totals.ChangedFiles++; totals.ChangedLines += CountChangedLines(input, output); }
             totals.ZwspInserted += Math.Max(0, inserted);
 
             if (cfg.DryRun)
             {
-                if (changed) PrintDiff(path, input, output, cfg.MaxDiff);
+                if (changed) PrintDiff(path, input, output, cfg.MaxDiff, cfg.Options.BreakChar);
                 else Console.Error.WriteLine("ไม่เปลี่ยนแปลง: " + path);
                 return 0;
             }
@@ -202,13 +226,13 @@ namespace ThaiWrap.Cli
                     string bak = path + ".bak";
                     if (!File.Exists(bak)) File.Copy(path, bak); // เก็บ .bak รอบแรก (ต้นฉบับแท้) ไว้ตลอด
                     WriteTextWithBom(path, output, enc);
-                    Console.Error.WriteLine("เขียนทับ" + (File.Exists(bak) ? "" : " (+.bak ใหม่)") + ": " + path + $"  [ZWSP +{inserted}]");
+                    Console.Error.WriteLine("เขียนทับ" + (File.Exists(bak) ? "" : " (+.bak ใหม่)") + ": " + path + $"  [{BreakName(brk)} +{inserted}]");
                 }
                 else
                 {
                     string dst = Path.Combine(Path.GetDirectoryName(path)!, Path.GetFileNameWithoutExtension(path) + ".zwsp" + Path.GetExtension(path));
                     WriteTextWithBom(dst, output, enc);
-                    Console.Error.WriteLine("เขียนใหม่: " + dst + $"  [ZWSP +{inserted}]");
+                    Console.Error.WriteLine("เขียนใหม่: " + dst + $"  [{BreakName(brk)} +{inserted}]");
                 }
             }
             else
@@ -217,7 +241,7 @@ namespace ThaiWrap.Cli
             }
 
             if (cfg.Stats)
-                Console.Error.WriteLine($"[{path}] format={format} changed={changed} zwsp+{inserted} dict={segmenter.WordCount}");
+                Console.Error.WriteLine($"[{path}] format={format} changed={changed} {BreakName(brk)}+{inserted} dict={segmenter.WordCount}");
             return 0;
         }
 
@@ -336,10 +360,12 @@ namespace ThaiWrap.Cli
 
         // ---------- diff ----------
 
-        private static long CountZwsp(string s)
+        private static string BreakName(char brk) => brk == '\u200A' ? "hairspace" : "ZWSP";
+
+        private static long CountBreak(string s, char brk)
         {
             long c = 0;
-            foreach (char ch in s) if (ch == '\u200B') c++;
+            foreach (char ch in s) if (ch == brk) c++;
             return c;
         }
 
@@ -352,7 +378,7 @@ namespace ThaiWrap.Cli
             return count;
         }
 
-        private static void PrintDiff(string label, string before, string after, int maxDiff)
+        private static void PrintDiff(string label, string before, string after, int maxDiff, char brk)
         {
             var a = before.Split('\n');
             var b = after.Split('\n');
@@ -365,14 +391,14 @@ namespace ThaiWrap.Cli
                 string old = i < a.Length ? a[i].TrimEnd() : "<ไม่มี>";
                 string now = i < b.Length ? b[i].TrimEnd() : "<ไม่มี>";
                 if (old == now) continue;
-                Console.Error.WriteLine($"  {i + 1,4} - {Show(old)}");
-                Console.Error.WriteLine($"        + {Show(now)}");
+                Console.Error.WriteLine($"  {i + 1,4} - {Show(old, brk)}");
+                Console.Error.WriteLine($"        + {Show(now, brk)}");
                 shown++;
             }
             if (shown >= maxDiff) Console.Error.WriteLine($"  … (ตัดเหลือ — ใช้ --max-diff เพื่อดูเพิ่ม)");
         }
 
-        private static string Show(string s) => s.Replace("\u200B", "·");
+        private static string Show(string s, char brk) => s.Replace(brk.ToString(), "·");
 
         private const string Usage =
             "thaiwrap — แทรก ZWSP ที่รอยต่อคำไทย เพื่อให้เกมตัดบรรทัดถูกจุด\n" +

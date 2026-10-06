@@ -138,6 +138,22 @@ namespace ThaiWrap.Tests
             Check("mask: ข้อความหลัง mask ยังถูกตัดคำ", g4.Contains("}" + "ทดสอบ" + zw), Show(g4));
             Check("mask: round-trip ถูกแม้มี ZWSP เดิม", g4.Replace(zw.ToString(), "") == g4in.Replace(zw.ToString(), ""));
 
+            Console.WriteLine("== DP fallback & hairspace ==");
+            string u1 = seg.InsertZwsp("ฌาฌาฌาฌาฌาฌาฌาฌาฌา");
+            Check("unknown ยาว: ไม่แยก า ออกจากพยัญชนะ (ฌา เป็นหน่วยเดียว)",
+                !u1.Contains("ฌ" + zw) && u1.Contains(zw), Show(u1));
+            string u2 = seg.InsertZwsp("เฌนเฌนเฌนเฌนเฌนเฌนเฌนเฌนเฌน");
+            Check("unknown ยาว: สระหน้าไม่ค้างท้ายชิ้น (fallback ใช้กฎขอบเขต DP)",
+                !u2.Contains("เ" + zw) && u2.Contains(zw), Show(u2));
+            var segHair = ThaiSegmenter.FromFile(wordList, new ThaiWrapOptions { BreakChar = '\u200A' });
+            string h1 = segHair.InsertZwsp("นักเดินทางจากแดนไกล");
+            Check("hairspace: แทรก U+200A โดยไม่ปน ZWSP",
+                h1.Contains('\u200A') && !h1.Contains(zw));
+            Check("hairspace: idempotent", segHair.InsertZwsp(h1) == h1);
+            string h2 = segHair.InsertZwsp("ฌาฌาฌาฌาฌาฌาฌาฌาฌา");
+            Check("hairspace: กฎ fallback ใช้ได้กับ break char อื่น",
+                !h2.Contains("ฌ" + '\u200A') && h2.Contains('\u200A'));
+
             Console.WriteLine("== formats: csv ==");
             string csv = File.ReadAllText("tests/samples/items.csv", Encoding.UTF8);
             var table0 = CsvProcessor.ParseTable(csv, ',');
