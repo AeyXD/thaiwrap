@@ -136,11 +136,12 @@ namespace ThaiWrap
             var parts = SplitControlParts(text);
             if (parts.Count == 1 && !parts[0].Masked) return InsertZwspRaw(text);
 
+            // ชิ้นที่ไม่ใช่ mask ถูกตัดคำแบบอิสระ — InsertZwspRaw แทรกเฉพาะระหว่าง token
+            // จึงไม่มี ZWSP ใหม่หลุดไปติดขอบ mask และ ZWSP เดิมของผู้ใช้ถูกรักษาไว้ทั้งหมด
             var sb = new StringBuilder(text.Length + 16);
             foreach (var part in parts)
             {
-                if (part.Masked) sb.Append(part.Text);
-                else sb.Append(InsertZwspRaw(part.Text).Trim(ThaiChars.ZeroWidthSpace));
+                sb.Append(part.Masked ? part.Text : InsertZwspRaw(part.Text));
             }
             return sb.ToString();
         }
@@ -170,8 +171,7 @@ namespace ThaiWrap
             var sb = new StringBuilder();
             foreach (var part in parts)
             {
-                if (part.Masked) sb.Append(part.Text);
-                else sb.Append(SegmentToStringRaw(part.Text, separator).Trim(separator.ToCharArray()));
+                sb.Append(part.Masked ? part.Text : SegmentToStringRaw(part.Text, separator));
             }
             return sb.ToString();
         }

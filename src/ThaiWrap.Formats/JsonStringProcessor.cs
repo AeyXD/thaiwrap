@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 
 namespace ThaiWrap.Formats
@@ -11,16 +12,29 @@ namespace ThaiWrap.Formats
     public static class JsonStringProcessor
     {
         /// <param name="keyFilter">ถ้าระบุ — แปลงเฉพาะ value ที่อยู่ใต้ key ชื่อนี้
-        /// (ค่าใน array ใช้ชื่อ key ของ array นั้น)</param>
+        /// (ค่าใน array ใช้ชื่อ key ที่ครอบ array นั้น เช่น {"lines":["a"]} → key "lines")</param>
         public static string Process(string input, Func<string, string> transform, Func<string, bool>? keyFilter = null)
         {
             var sb = new StringBuilder(input.Length);
             int i = 0, n = input.Length;
-            string? lastKey = null;
+
+            // stack ติดตามระดับ object/array:
+            // - object frame: Key = property ล่าสุดที่เห็น (จะถูกใช้โดย value ถัดไป)
+            // - array frame:  Key = ชื่อ property ที่ครอบ array นี้
+            // value string ใช้ Key ของ frame บนสุด — กัน lastKey รั่วข้ามระดับ
+            var frames = new List<JsonFrame>();
 
             while (i < n)
             {
                 char c = input[i];
+                if (c == '{') { frames.Add(new JsonFrame { IsObject = true }); sb.Append(c); i++; continue; }
+                if (c == '[')
+                {
+                    var owner = frames.Count > 0 ? frames[frames.Count - 1] : null;
+                    frames.Add(new JsonFrame { IsObject = false, Key = owner?.IsObject == true ? owner.Key : null });
+                    sb.Append(c); i++; continue;
+                }
+                if ((c == '}' || c == ']') && frames.Count > 0) { frames.RemoveAt(frames.Count - 1); sb.Append(c); i++; continue; }
                 if (c != '"') { sb.Append(c); i++; continue; }
 
                 // อ่าน string literal ทั้งอัน (รวม ")
@@ -39,10 +53,16 @@ namespace ThaiWrap.Formats
                 while (j < n && (input[j] == ' ' || input[j] == '\t' || input[j] == '\r' || input[j] == '\n')) j++;
                 bool isKey = j < n && input[j] == ':';
 
-                if (isKey) { lastKey = Decode(literal); sb.Append(literal); continue; }
+                if (isKey)
+                {
+                    if (frames.Count > 0) frames[frames.Count - 1].Key = Decode(literal);
+                    sb.Append(literal);
+                    continue;
+                }
 
                 string decoded = Decode(literal);
-                if (keyFilter != null && (lastKey == null || !keyFilter(lastKey)))
+                string? ownerKey = frames.Count > 0 ? frames[frames.Count - 1].Key : null;
+                if (keyFilter != null && (ownerKey == null || !keyFilter(ownerKey)))
                 {
                     sb.Append(literal); continue; // ไม่ใช่ field ที่เลือก
                 }
@@ -51,6 +71,12 @@ namespace ThaiWrap.Formats
                 sb.Append(Encode(transformed));
             }
             return sb.ToString();
+        }
+
+        private sealed class JsonFrame
+        {
+            public bool IsObject;
+            public string? Key;
         }
 
         /// <summary>ถอดรหัส string literal (รวม ") เป็นค่าจริง</summary>

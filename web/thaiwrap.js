@@ -122,11 +122,11 @@ class ThaiSegmenter {
     if (!text) return text;
     const parts = this._splitControlParts(text);
     if (parts.length === 1 && !parts[0].masked) return this._insertZwspRaw(text);
+    // ชิ้นที่ไม่ใช่ mask ถูกตัดคำแบบอิสระ — ไม่มี ZWSP ใหม่หลุดไปติดขอบ mask
+    // และ ZWSP เดิมของผู้ใช้ถูกรักษาไว้ (mirror ของ C#)
     let out = '';
-    const edge = new RegExp('^\\u200B+|\\u200B+$', 'g');
     for (const p of parts) {
-      if (p.masked) out += p.text;
-      else out += this._insertZwspRaw(p.text).replace(edge, '');
+      out += p.masked ? p.text : this._insertZwspRaw(p.text);
     }
     return out;
   }
@@ -148,11 +148,8 @@ class ThaiSegmenter {
     const parts = this._splitControlParts(text);
     if (parts.length === 1 && !parts[0].masked) return this._segmentToStringRaw(text, sep);
     let out = '';
-    const esc = sep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const edge = new RegExp('^' + esc + '+|' + esc + '+$', 'g');
     for (const p of parts) {
-      if (p.masked) out += p.text;
-      else out += this._segmentToStringRaw(p.text, sep).replace(edge, '');
+      out += p.masked ? p.text : this._segmentToStringRaw(p.text, sep);
     }
     return out;
   }

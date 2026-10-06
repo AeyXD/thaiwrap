@@ -132,6 +132,11 @@ namespace ThaiWrap.Tests
                 g2.Replace("<color=red>", "").Replace("</color>", "").Contains(zw), Show(g2));
             string g3 = seg.InsertZwsp("เดินทางจากกรุงเทพฯ ไปยังอยุธยาด้วยเรือโดยสาร");
             Check("ฯ (U+0E2F): ไม่แทรก ZWSP ก่อน/หลัง ฯ", !g3.Contains(zw + "ฯ") && !g3.Contains("ฯ" + zw), Show(g3));
+            string g4in = "ข้อความ" + zw + "{ชื่อผู้เล่น}ทดสอบระบบ";
+            string g4 = seg.InsertZwsp(g4in);
+            Check("mask: ZWSP เดิมก่อน mask ถูกรักษาไว้", g4.Contains("ข้อความ" + zw + "{ชื่อผู้เล่น}"), Show(g4));
+            Check("mask: ข้อความหลัง mask ยังถูกตัดคำ", g4.Contains("}" + "ทดสอบ" + zw), Show(g4));
+            Check("mask: round-trip ถูกแม้มี ZWSP เดิม", g4.Replace(zw.ToString(), "") == g4in.Replace(zw.ToString(), ""));
 
             Console.WriteLine("== formats: csv ==");
             string csv = File.ReadAllText("tests/samples/items.csv", Encoding.UTF8);
@@ -163,6 +168,17 @@ namespace ThaiWrap.Tests
             string jsonKeys = JsonStringProcessor.Process(json, s => seg.InsertZwsp(s), k => k == "desc");
             Check("json --json-keys: แปลงเฉพาะ key ที่เลือก",
                 jsonKeys.Contains(zw) && jsonKeys.Contains("\"name\": \"ดาบแห่งรุ่งอรุณ\""));
+
+            Console.WriteLine("== formats: json (nested --json-keys) ==");
+            const string nestedJson = "{\"items\":[{\"desc\":\"ข้อความไทย\"},\"ข้อความไทย\"]}";
+            string nestedOut = JsonStringProcessor.Process(nestedJson, s => seg.InsertZwsp(s), k => k == "desc");
+            int bareCount = CountOccurrences(nestedOut, "\"ข้อความไทย\"");
+            Check("json ซ้อน: value ท้าย array ไม่ถูกแปลง (key ไม่รั่วข้ามระดับ)",
+                bareCount == 1 && nestedOut.Contains(zw), nestedOut.Replace(zw.ToString(), "·"));
+            const string nestedJson2 = "{\"lines\":[\"ข้อความไทย\",\"อีกข้อความ\"]}";
+            string nestedOut2 = JsonStringProcessor.Process(nestedJson2, s => seg.InsertZwsp(s), k => k == "lines");
+            Check("json ซ้อน: value ใน array ใช้ key ของ array ที่ครอบ (แปลงทั้งสอง element)",
+                nestedOut2.Split(zw).Length - 1 >= 2, nestedOut2.Replace(zw.ToString(), "·"));
 
             Console.WriteLine("== formats: po ==");
             string po = File.ReadAllText("tests/samples/messages.po", Encoding.UTF8);
@@ -261,5 +277,12 @@ namespace ThaiWrap.Tests
 
         private static int LinesWith(string s, string prefix) =>
             s.Split('\n').Count(l => l.TrimStart().StartsWith(prefix));
+
+        private static int CountOccurrences(string s, string needle)
+        {
+            int count = 0, idx = 0;
+            while ((idx = s.IndexOf(needle, idx, StringComparison.Ordinal)) >= 0) { count++; idx += needle.Length; }
+            return count;
+        }
     }
 }
