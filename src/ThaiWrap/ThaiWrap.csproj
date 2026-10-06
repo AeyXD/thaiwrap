@@ -6,6 +6,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <RootNamespace>ThaiWrap</RootNamespace>
+    <!-- trimming ทำที่ระดับแอป (CLI) — ไลบรารี netstandard ปิดไม่ให้ NETSDK1124 -->
+    <PublishTrimmed>false</PublishTrimmed>
     <Description>Thai word segmentation + ZWSP insertion for game text line-breaking</Description>
   </PropertyGroup>
 

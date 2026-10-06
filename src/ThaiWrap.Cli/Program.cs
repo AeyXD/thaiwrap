@@ -39,7 +39,7 @@ namespace ThaiWrap.Cli
             var cfg = new Config();
             try
             {
-                ParseArgs(args, cfg);
+                if (!ParseArgs(args, cfg)) return 0; // --help แสดง usage แล้วจบปกติ
             }
             catch (ArgumentException ex)
             {
@@ -75,7 +75,8 @@ namespace ThaiWrap.Cli
 
         // ---------- argument parsing ----------
 
-        private static void ParseArgs(string[] args, Config cfg)
+        /// <summary>คืน false เมื่อผู้ใช้ขอ --help (แสดง usage แล้วให้จบ exit 0)</summary>
+        private static bool ParseArgs(string[] args, Config cfg)
         {
             for (int i = 0; i < args.Length; i++)
             {
@@ -107,7 +108,9 @@ namespace ThaiWrap.Cli
                     case "--unknown-threshold": cfg.Options.UnknownBreakThreshold = int.Parse(Val(args, ref i)); break;
                     case "--stats": cfg.Stats = true; break;
                     case "--help":
-                    case "-h": throw new ArgumentException(Usage);
+                    case "-h":
+                        Console.Out.WriteLine(Usage);
+                        return false;
                     default:
                         if (a.StartsWith("-")) throw new ArgumentException("ตัวเลือกไม่รู้จัก: " + a);
                         if (cfg.InputPath != null) throw new ArgumentException("ระบุ input ได้ที่เดียว");
@@ -116,6 +119,7 @@ namespace ThaiWrap.Cli
                 }
             }
             ValidateFormat(cfg.Format);
+            return true;
         }
 
         private static string Val(string[] args, ref int i)
@@ -386,7 +390,7 @@ namespace ThaiWrap.Cli
             "  -r, --recursive       โหมด folder: เดินทั้งต้นไม้\n" +
             "  --inplace             โหมด folder: เขียนทับไฟล์เดิม + สำรอง .bak (default: สร้าง <ชื่อ>.zwsp.<ext>)\n" +
             "  --max-diff <n>        จำนวนบรรทัด diff สูงสุดที่แสดง (default 40)\n" +
-            "  --maxword <n>         ความยาวคำยาวสุดในพจนานุกรม (default 12)\n" +
+            "  --maxword <n>         ความยาวคำสูงสุดจากพจนานุกรม (default 0 = ไม่จำกัด)\n" +
             "  --unknown-threshold <n> จำนวน cluster ก่อนยอมให้ตัดคำนอกพจนานุกรม (default 8)\n" +
             "  --stats               สถิติเพิ่มเติมทาง stderr";
     }

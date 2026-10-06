@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <RootNamespace>ThaiWrap.Formats</RootNamespace>
+    <PublishTrimmed>false</PublishTrimmed>
     <Description>Line-safe processors for translation file formats (csv/json/po/key=value)</Description>
   </PropertyGroup>
 
