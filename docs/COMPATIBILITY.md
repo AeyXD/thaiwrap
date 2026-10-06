@@ -8,6 +8,7 @@
 |---|---|---|---|
 | **เอนจินที่ตัดบรรทัดที่ช่องว่างเท่านั้น** (กลุ่มเป้าหมายหลักของ thaiwrap) | ✅ โดยนิยาม | ❌ ตัดกลางคำ/ล้นกรอบ | **ใช้ thaiwrap แล้วปัญหาหาย** (ดู Phase 0: 8→0 จุดตัดกลางคำ) |
 | **TextMeshPro** (uGUI 2.0 / Unity 6+) | ✅ | ❌ | ใช้ได้เลย — แทรก ZWSP ใน string ก่อน set text |
+| **Scaleform GFx** (Witcher 3 และเกม AAA จำนวนมาก) | ❌ ไม่นับ ZWSP เป็นจุดตัด — ต้องใช้ **hair space (U+200A)** + เติม glyph ว่างในฟอนต์เกม | ❌ | ใช้ `thaiwrap --break-char hairspace` และ patch ฟอนต์เกมให้มี glyph ว่างที่ U+200A |
 | **Ren'Py 8.x** (โหมด default `western`, `unicode`, `anywhere`) | ✅ | ❌ (ยกเว้นตั้ง `language "thaic90"`) | ใช้ได้เลย หรือลองโหมด `thaic90` ในตัว |
 | **Godot 4.x** (text_server_adv) | ไม่กระทบ layout | ✅ ตัดไทย native ได้ | ZWSP ปลอดภัยแต่ไม่จำเป็น; คุณภาพจุดตัดดู issue #99474 |
 | **เบราว์เซอร์ / canvas (ICU, CoreText)** | ✅ | ✅ ตัดไทย native | ใช้ได้ทั้งสองกรณี |
@@ -16,6 +17,20 @@
 | **Unreal (Slate/UMG)** | ยังไม่ได้ทดสอบ | ไม่ทราบ | ต้องทดสอบเพิ่ม (UE มี ICUBreakIterator ในเอนจิน แต่ไม่ทราบพาธที่ UMG ใช้จริง) |
 
 ## หลักฐานแต่ละแถว
+
+### Scaleform GFx (Witcher 3) — ❌ ZWSP ใช้ไม่ได้ ต้องใช้ hair space
+
+หลักฐานจาก production จริง: [ThaiW3Setup](https://github.com/AeyXD/ThaiW3Setup) (ตัวติดตั้งซับไทย The Witcher 3 Remastered)
+ค้นพบและใช้แนวทางนี้กับผู้เล่นจริง:
+
+- Scaleform **ตัดบรรทัดที่ Unicode space เท่านั้น** — ZWSP (U+200B) ไม่ถูกนับเป็น space
+  แต่ **hair space (U+200A) ถูกนับเป็น space** จึงเป็นจุดตัดที่มองไม่เห็นได้
+- ต้อง **patch ฟอนต์ของเกม** (`fonts_en.redswf`) เติม glyph เปล่า advance=0 ที่ U+200A ในทุก DefineFont3
+  ไม่งั้น hair space จะกว้างตาม metrics ของฟอนต์ (`core/swf_font.py` ของ ThaiW3Setup)
+- ความเพี้ยนเฉพาะตัว: **สระ/วรรณยุกต์ท้ายบรรทัดขอบขวาโดนกลืน** — ต้องต่อ NBSP หลัง mark ท้ายข้อความ
+  (`guard_trailing_mark` ใน `core/text_builder.py`)
+
+สำหรับเกม Scaleform อื่นๆ: ใช้ `thaiwrap --break-char hairspace` กับไฟล์แปล + วิธี patch ฟอนต์ตามแนวทางเดียวกัน
 
 ### TextMeshPro (Unity) — ✅ รับ ZWSP
 

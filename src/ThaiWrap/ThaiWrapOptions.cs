@@ -3,12 +3,10 @@ namespace ThaiWrap
     public sealed class ThaiWrapOptions
     {
         /// <summary>
-        /// Longest dictionary match attempted, in characters. Dictionary entries longer
-        /// than this are matched as smaller sub-words instead, so that break opportunities
-        /// stay dense enough for narrow game text boxes (a 20-character "word" cannot fit
-        /// a 300px dialog box).
+        /// ความยาวคำสูงสุดจากพจนานุกรมที่ยอมรับ (ตัวรายการที่ยาวกว่าจะถูกข้ามตอนโหลด)
+        /// 0 = ไม่จำกัด (แนะนำ — อัลกอริทึม DP เลือกจุดตัดแบบปลอดภัยอยู่แล้ว)
         /// </summary>
-        public int MaxWordLength { get; set; } = 12;
+        public int MaxWordLength { get; set; } = 0;
 
         /// <summary>
         /// An unknown Thai run (proper name, typo, new word) stays unbreakable while it is
@@ -24,5 +22,12 @@ namespace ThaiWrap
         /// เพราะการแทนค่า/อ้างอิงจะเสีย แม้ข้างในจะมีตัวอักษรไทย
         /// </summary>
         public bool ProtectPlaceholders { get; set; } = true;
+
+        /// <summary>
+        /// ตัวอักษรที่แทรกที่รอยต่อคำ — default U+200B (ZWSP) ใช้ได้กับ TextMeshPro/Ren'Py/
+        /// เอนจินที่ตัดที่ space ทั่วไป · สำหรับ Scaleform/Flash (เช่น Witcher 3) ต้องใช้
+        /// U+200A hair space เพราะไม่นับ ZWSP เป็นจุดตัด และต้องเติม glyph ว่างให้ฟอนต์ด้วย
+        /// </summary>
+        public char BreakChar { get; set; } = '\u200B';
     }
 }

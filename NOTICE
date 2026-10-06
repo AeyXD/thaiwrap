@@ -1,10 +1,11 @@
 thaiwrap — ส่วนประกอบของบุคคลที่สาม
 
 1) data/words_th.txt
-   คำศัพท์ภาษาไทย 62,107 รายการ นำมาจาก pythainlp corpus
-   https://github.com/PyThaiNLP/pythainlp
-   ภายใต้ Apache License 2.0 (ใช้ซ้ำ/แก้ไขได้ ต้องแนบใบอนุญาตและระบุ NOTICE)
-   รายละเอียดใบอนุญาต: https://www.apache.org/licenses/LICENSE-2.0
+   คำศัพท์ภาษาไทย 65,758 รายการ — union ของสองแหล่ง:
+   - pythainlp corpus https://github.com/PyThaiNLP/pythainlp (Apache License 2.0)
+   - ICU thaidict http://site.icu-project.org (Unicode License)
+     https://www.unicode.org/license.txt
+   ใช้ซ้ำ/แก้ไขได้ตามเงื่อนไขของทั้งสองใบอนุญาต
 
 2) web/fonts/Sarabun-Regular.ttf, web/fonts/Kanit-Regular.ttf
    ฟอนต์ดั้งเดิมจาก Google Fonts ภายใต้ SIL Open Font License 1.1

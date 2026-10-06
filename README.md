@@ -18,7 +18,7 @@ thaiwrap แก้ที่ตัวข้อความ: ตัดคำด้
 
 | ส่วน | ที่อยู่ | คำอธิบาย |
 |---|---|---|
-| Core library (C#) | `src/ThaiWrap` | netstandard2.0 — ตัดคำ + แทรก ZWSP, ไม่มี dependency |
+| Core library (C#) | `src/ThaiWrap` | netstandard2.0 — ตัดคำด้วย **DP optimal segmentation** + แทรกตัวตัดบรรทัด, ไม่มี dependency |
 | Formats library | `src/ThaiWrap.Formats` | csv/tsv/json/po/keyvalue — parser อนุรักษ์เดิม ไม่มี dependency |
 | CLI | `src/ThaiWrap.Cli` | dry-run diff, เลือกคอลัมน์, โหมด folder, BOM/CRLF |
 | Tests | `tests/ThaiWrap.Tests` | invariant checks + ชุดประโยคเกม 39 ประโยค |
@@ -26,7 +26,7 @@ thaiwrap แก้ที่ตัวข้อความ: ตัดคำด้
 | BepInEx plugin | `src/ThaiWrap.BepInEx` | hook TextMeshPro/UGUI ตอนรัน (net35, ไม่มี dependency) — แพ็กด้วย `tools/package-plugin.sh` |
 | Font patcher | `tools/font_zwsp_patch.py` | เติม glyph ZWSP เปล่าให้ฟอนต์ TrueType ที่ไม่มี |
 | Godot compat test | `tools/godot-compat/` | สคริปต์ทดสอบ headless รันซ้ำได้ |
-| Word list | `data/words_th.txt` | 62,107 คำ จาก [pythainlp](https://github.com/PyThaiNLP/pythainlp) (Apache-2.0) |
+| Word list | `data/words_th.txt` | 65,758 คำ — union ของ [pythainlp](https://github.com/PyThaiNLP/pythainlp) (Apache-2.0) + ICU thaidict (Unicode License) |
 
 ## ใช้งาน CLI
 
@@ -44,7 +44,17 @@ dotnet run --project src/ThaiWrap.Cli -- data/ -r                 # ทั้ง
 dotnet run --project src/ThaiWrap.Cli -- th.txt -f keyvalue -o th.out.txt
 ```
 
-Options หลัก: `-f auto|text|csv|tsv|json|po|keyvalue` · `--columns "1,3" หรือ "ชื่อ"` · `--json-keys "desc,tooltip"` · `--dry-run` (diff, ZWSP แสดงเป็น ·) · `-r` · `--inplace` (+.bak) · `--maxword` · `--unknown-threshold` · `--stats`
+Options หลัก: `-f auto|text|csv|tsv|json|po|keyvalue` · `--columns "1,3" หรือ "ชื่อ"` · `--json-keys "desc,tooltip"` · `--break-char zwsp|hairspace` · `--dry-run` (diff, ZWSP แสดงเป็น ·) · `-r` · `--inplace` (+.bak) · `--maxword` (0=ไม่จำกัด) · `--unknown-threshold` · `--stats`
+
+**เกม Scaleform/Flash (เช่น Witcher 3)**: ZWSP ไม่เป็นจุดตัด ต้องใช้ `--break-char hairspace` (U+200A) และฟอนต์ต้องมี glyph ว่างที่ U+200A — ดูวิธีเต็มใน [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)
+
+## อัลกอริทึมตัดคำ
+
+**DP optimal segmentation** — หาการตัดคำที่ minimizes (จำนวนตัวอักษรนอกพจนานุกรม, จำนวนคำ) ภายใต้กฎพยัญชนะทวิภาคของไทย (ห้ามแยกสระ/วรรณยุกต์ออกจากพยัญชนะ ห้ามทิ้งสระหน้าท้ายบรรทัด ห้ามตัดก่อน ๆ/ฯ)
+
+- port จาก [ThaiW3Setup](https://github.com/AeyXD/ThaiW3Setup) (`core/thai_wrap.py`, MIT) ซึ่งใช้จริงใน production กับซับไทย The Witcher 3
+- คุณภาพ (เทียบ pythainlp/newmm, 40 ประโยคเกม): **precision 1.000 · recall 0.773 · F1 0.872** (เดิม greedy longest-match: P 0.936 · F1 0.866)
+- ตรวจสอบการ port: output ตรงกับต้นฉบับ Python เป๊ะ 41/42 ประโยค (ตัวที่ต่างคือเคส `{placeholder}` ที่ thaiwrap ปกป้องทั้งก้อนโดยเจตนา)
 
 ความปลอดภัย:
 - **JSON**: key ไม่ถูกแตะเสมอ · string **value** ถูกแปลงทุกตัวโดย default — ถ้าไฟล์มี value ที่เป็น ID/รหัส ให้ระบุ `--json-keys` เฉพาะ field ข้อความ
@@ -79,6 +89,7 @@ cd web && python3 -m http.server 8741
 ## สถานะ
 
 - **Phase 0 (พิสูจน์ไอเดีย): เสร็จ** — ดูผลที่ [docs/PHASE0.md](docs/PHASE0.md)
+- **อัปเกรดใหญ่ (จากความร่วมมือกับ [ThaiW3Setup](https://github.com/AeyXD/ThaiW3Setup))**: อัลกอริทึม DP · dict รวม 65,758 คำ · รองรับ Scaleform ผ่าน `--break-char hairspace`
 - **Phase 1 (ตาราง compatibility): เสร็จ** — ดูที่ [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)
   - TextMeshPro, Ren'Py รับ ZWSP ✅ · Godot ตัดไทย native อยู่แล้ว · RPG Maker MZ ต้องแก้ที่ plugin
   - Font audit: Sarabun/Kanit/Prompt/Mitr/Trirong **ไม่มี glyph ZWSP** → ใช้ `tools/font_zwsp_patch.py` เติมให้

@@ -22,6 +22,14 @@ namespace ThaiWrap
         // dangling at the end of a line separated from its consonant.
         public static bool IsLeadingVowel(char c) => c >= '\u0E40' && c <= '\u0E44';
 
+        // กฎของการแบ่ง segment (ใช้ใน DP): อักขระที่ห้ามเป็นต้น segment ได้แก่
+        // ฯ, ะ ั า ำ ิ-ฺ (สระจ่อย/ตาม/วรรณยุกต์) และ ๆ ๅ ็ ่-๎
+        public static bool NoBreakBeforeSegment(char c) =>
+            c == '\u0E2F' || (c >= '\u0E30' && c <= '\u0E3A') || (c >= '\u0E45' && c <= '\u0E4E');
+
+        // สระหน้าห้ามปิดท้าย segment (ต้องติดกับพยัญชนะถัดไป)
+        public static bool NoBreakAfterSegment(char c) => IsLeadingVowel(c);
+
         // ๆ (U+0E46 mai yamok) and ฯ (U+0E2F paiyannoi) attach to the preceding word.
         public static bool IsThaiPunctuation(char c) => c == '\u0E46' || c == '\u0E2F';
 

@@ -19,6 +19,7 @@ namespace ThaiWrap.Cli
             public string Format = "auto";
             public string? Columns;
             public string? JsonKeys;
+            public string BreakChar = "zwsp";
             public bool DryRun;
             public bool Recursive;
             public bool InPlace;
@@ -91,6 +92,12 @@ namespace ThaiWrap.Cli
                     case "-f": cfg.Format = Val(args, ref i); break;
                     case "--columns": cfg.Columns = Val(args, ref i); break;
                     case "--json-keys": cfg.JsonKeys = Val(args, ref i); break;
+                    case "--break-char":
+                        cfg.BreakChar = Val(args, ref i);
+                        if (cfg.BreakChar != "zwsp" && cfg.BreakChar != "hairspace")
+                            throw new ArgumentException("--break-char ใช้ได้: zwsp | hairspace");
+                        cfg.Options.BreakChar = cfg.BreakChar == "hairspace" ? '\u200A' : '\u200B';
+                        break;
                     case "--dry-run": cfg.DryRun = true; break;
                     case "--recursive":
                     case "-r": cfg.Recursive = true; break;
@@ -374,6 +381,7 @@ namespace ThaiWrap.Cli
             "  -f, --format <fmt>    auto | text | csv | tsv | json | po | keyvalue (default auto ตามนามสกุล)\n" +
             "  --columns <list>      csv/tsv: \"1,3\" หรือ \"ชื่อคอลัมน์\" — default ทุกคอลัมน์ (ใช้ชื่อ = ข้ามแถว header)\n" +
             "  --json-keys <list>    json: แปลงเฉพาะ value ใต้ key เหล่านี้ เช่น \"desc,tooltip\" — default ทุก string value\n" +
+            "  --break-char <c>      zwsp (default) | hairspace — เกม Scaleform/Flash (เช่น Witcher 3) ต้องใช้ hairspace\n" +
             "  --dry-run             แสดง diff (ZWSP แสดงเป็น ·) โดยไม่เขียนไฟล์\n" +
             "  -r, --recursive       โหมด folder: เดินทั้งต้นไม้\n" +
             "  --inplace             โหมด folder: เขียนทับไฟล์เดิม + สำรอง .bak (default: สร้าง <ชื่อ>.zwsp.<ext>)\n" +

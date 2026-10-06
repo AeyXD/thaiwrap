@@ -33,8 +33,8 @@ namespace ThaiWrap.BepInEx
 
             _enabled = Config.Bind("General", "Enabled", true,
                 "เปิด/ปิดการแทรก ZWSP ทั้งหมด (ไม่ต้องรีสตาร์ทเกม)");
-            _maxWordLength = Config.Bind("Segmentation", "MaxWordLength", 12,
-                "ความยาวคำยาวสุดที่ยอม match เป็นก้อนเดียว (เล็กลง = จุดตัดถี่ขึ้น)");
+            _maxWordLength = Config.Bind("Segmentation", "MaxWordLength", 0,
+                "ความยาวคำสูงสุดจากพจนานุกรม (0 = ไม่จำกัด — แนะนำสำหรับอัลกอริทึม DP)");
             _unknownBreakThreshold = Config.Bind("Segmentation", "UnknownBreakThreshold", 8,
                 "จำนวน cluster ก่อนยอมให้ตัดข้อความนอกพจนานุกรม");
 

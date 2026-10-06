@@ -33,11 +33,14 @@ namespace ThaiWrap
         public string Text { get; }
         public TokenKind Kind { get; }
 
+        /// <summary>ตัดขอบหลัง token นี้ได้ (ก้อน unknown ตัดรอบขอบได้แต่ไม่ตัดข้างใน — ตามแนวทาง W3)</summary>
         public bool IsBreakableAfter =>
-            Kind == TokenKind.DictionaryWord || Kind == TokenKind.Cluster || Kind == TokenKind.NonThaiText;
+            Kind == TokenKind.DictionaryWord || Kind == TokenKind.Cluster ||
+            Kind == TokenKind.NonThaiText || Kind == TokenKind.UnknownRun;
 
         public bool IsBreakableBefore =>
-            Kind == TokenKind.DictionaryWord || Kind == TokenKind.Cluster || Kind == TokenKind.NonThaiText;
+            Kind == TokenKind.DictionaryWord || Kind == TokenKind.Cluster ||
+            Kind == TokenKind.NonThaiText || Kind == TokenKind.UnknownRun;
 
         public override string ToString() => Kind + ":" + Text;
     }

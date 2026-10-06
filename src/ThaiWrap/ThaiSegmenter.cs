@@ -12,13 +12,17 @@ namespace ThaiWrap
     /// </summary>
     public sealed class ThaiSegmenter
     {
-        private readonly HashSet<string> _words;
         private readonly ThaiWrapOptions _options;
+        private readonly TrieNode _root = new TrieNode();
+        private readonly int _wordCount;
+
+        private const int ShortWord = 2;
+        private const int Inf = int.MaxValue / 2;
 
         public ThaiSegmenter(IEnumerable<string> words, ThaiWrapOptions? options = null)
         {
             _options = options ?? new ThaiWrapOptions();
-            _words = new HashSet<string>(StringComparer.Ordinal);
+            int count = 0;
             foreach (var w in words)
             {
                 var t = w?.Trim();
@@ -26,8 +30,29 @@ namespace ThaiWrap
                 if (t.IndexOf(' ') >= 0 || t.IndexOf('\t') >= 0 || t.IndexOf('\r') >= 0 || t.IndexOf('\n') >= 0)
                     continue; // entries containing whitespace can never match space-free Thai text
                 if (t.Length < 2) continue; // single characters create noise, not word boundaries
-                _words.Add(t);
+                if (_options.MaxWordLength > 0 && t.Length > _options.MaxWordLength) continue;
+
+                var node = _root;
+                foreach (char c in t)
+                {
+                    node.Children ??= new Dictionary<char, TrieNode>();
+                    if (!node.Children.TryGetValue(c, out var next))
+                    {
+                        next = new TrieNode();
+                        node.Children[c] = next;
+                    }
+                    node = next;
+                }
+                node.End = true;
+                count++;
             }
+            _wordCount = count;
+        }
+
+        private sealed class TrieNode
+        {
+            public Dictionary<char, TrieNode>? Children;
+            public bool End;
         }
 
         public static ThaiSegmenter FromFile(string path, ThaiWrapOptions? options = null)
@@ -36,7 +61,7 @@ namespace ThaiWrap
         }
 
         public ThaiWrapOptions Options => _options;
-        public int WordCount => _words.Count;
+        public int WordCount => _wordCount;
 
         /// <summary>Tokenizes the full text; tokens concatenate back to the original string.</summary>
         public List<Token> Tokenize(string text)
@@ -85,48 +110,133 @@ namespace ThaiWrap
             return tokens;
         }
 
-        /// <summary>Greedy longest-match segmentation of one space-free Thai run.</summary>
+        /// <summary>
+        /// แบ่ง Thai run ด้วย DP (dynamic programming) — หาการตัดคำที่ minimizes
+        /// (จำนวนตัวอักษรนอกพจนานุกรม, จำนวนคำ) พร้อมกฎพยัญชนะทวิภาค
+        /// อัลกอริทึม port จาก ThaiW3Setup (core/thai_wrap.py, MIT) ซึ่งพิสูจน์แล้วใน production
+        /// ว่า precision ของจุดตัด 100% เทียบ newmm
+        /// </summary>
         private void TokenizeThaiRun(string text, int start, int end, List<Token> tokens)
         {
-            var unknown = new List<string>();
-            int i = start;
-            while (i < end)
+            string run = text.Substring(start, end - start);
+            int n = run.Length;
+
+            // ok[i] = อนุญาตให้ตัดที่ตำแหน่ง i (ระหว่าง run[i-1] กับ run[i])
+            var ok = new bool[n + 1];
+            for (int i = 0; i <= n; i++)
+                ok[i] = i == 0 || i == n ||
+                        (!ThaiChars.NoBreakBeforeSegment(run[i]) && !ThaiChars.NoBreakAfterSegment(run[i - 1]));
+
+            var bestUnknown = new int[n + 1];
+            var bestWords = new int[n + 1];
+            var prevStart = new int[n + 1];
+            var prevIsWord = new bool[n + 1];
+            for (int i = 0; i <= n; i++) { bestUnknown[i] = Inf; bestWords[i] = Inf; }
+            bestUnknown[0] = 0; bestWords[0] = 0;
+
+            for (int i = 0; i < n; i++)
             {
-                string? match = null;
-                int limit = Math.Min(_options.MaxWordLength, end - i);
-                for (int l = limit; l >= 2; l--)
+                if (bestUnknown[i] == Inf || !ok[i]) continue;
+                int u = bestUnknown[i], c = bestWords[i];
+
+                // ทางเลือกที่ 1: คำจากพจนานุกรม (เดินตาม trie จากตำแหน่ง i)
+                var node = _root;
+                int j = i;
+                while (j < n && node.Children != null && node.Children.TryGetValue(run[j], out var next))
                 {
-                    if (_words.Contains(text.Substring(i, l))) { match = text.Substring(i, l); break; }
+                    node = next;
+                    j++;
+                    if (node.End && ok[j])
+                    {
+                        int nu = u, nw = c + 1;
+                        if (nu < bestUnknown[j] || (nu == bestUnknown[j] && nw < bestWords[j]))
+                        {
+                            bestUnknown[j] = nu; bestWords[j] = nw;
+                            prevStart[j] = i; prevIsWord[j] = true;
+                        }
+                    }
                 }
 
-                if (match != null)
+                // ทางเลือกที่ 2: ก้อน unknown จาก i ถึงตำแหน่งถัดไปที่ตัดได้
+                int k = i + 1;
+                while (!ok[k]) k++;
+                int uu = u + (k - i), cw = c + 1;
+                if (uu < bestUnknown[k] || (uu == bestUnknown[k] && cw < bestWords[k]))
                 {
-                    FlushUnknown(tokens, unknown);
-                    tokens.Add(new Token(match, TokenKind.DictionaryWord));
-                    i += match.Length;
+                    bestUnknown[k] = uu; bestWords[k] = cw;
+                    prevStart[k] = i; prevIsWord[k] = false;
+                }
+            }
+
+            // backtrack → parts
+            var parts = new List<string>();
+            var isWords = new List<bool>();
+            int p = n;
+            while (p > 0)
+            {
+                int s = prevStart[p];
+                parts.Add(run.Substring(s, p - s));
+                isWords.Add(prevIsWord[p]);
+                p = s;
+            }
+            parts.Reverse();
+            isWords.Reverse();
+
+            // รวมก้อน unknown เข้ากับคำสั้นที่ติดกัน (กันจุดตัดที่ดูแปลก เช่น ท|ริ|สส์ → ทริสส์)
+            // mirror ของ merge pass ใน ThaiW3Setup core/thai_wrap.py
+            string pendingUnknown = "";
+            for (int idx = 0; idx < parts.Count; idx++)
+            {
+                string partText = parts[idx];
+                bool word = isWords[idx];
+                bool nearUnknown = (idx > 0 && !isWords[idx - 1]) || (idx + 1 < parts.Count && !isWords[idx + 1]);
+                bool unknown = !word || (partText.Length <= ShortWord && nearUnknown);
+
+                if (unknown)
+                {
+                    pendingUnknown += partText;
                 }
                 else
                 {
-                    // Consume one cluster: base character + following combining marks,
-                    // optionally absorbing an attached ๆ / ฯ.
-                    int j = i + 1;
-                    while (j < end && ThaiChars.IsCombiningMark(text[j])) j++;
-                    if (j < end && ThaiChars.IsThaiPunctuation(text[j])) j++;
-                    unknown.Add(text.Substring(i, j - i));
-                    i = j;
+                    if (pendingUnknown.Length > 0) { AddUnknown(tokens, pendingUnknown); pendingUnknown = ""; }
+                    tokens.Add(new Token(partText, TokenKind.DictionaryWord));
                 }
             }
-            FlushUnknown(tokens, unknown);
+            if (pendingUnknown.Length > 0) AddUnknown(tokens, pendingUnknown);
         }
 
-        private void FlushUnknown(List<Token> tokens, List<string> clusters)
+        /// <summary>ก้อน unknown: สั้นเก็บเป็นชิ้นเดียว ยาวเกิน threshold ยอมให้ตัดระดับ cluster กันล้นกรอบ</summary>
+        private void AddUnknown(List<Token> tokens, string chunk)
         {
-            if (clusters.Count == 0) return;
-            if (clusters.Count <= _options.UnknownBreakThreshold)
-                tokens.Add(new Token(clusters.Count == 1 ? clusters[0] : string.Concat(clusters.ToArray()), TokenKind.UnknownRun));
-            else
-                foreach (var cl in clusters) tokens.Add(new Token(cl, TokenKind.Cluster));
-            clusters.Clear();
+            if (chunk.Length == 0) return;
+            if (CountClusters(chunk) <= _options.UnknownBreakThreshold)
+            {
+                tokens.Add(new Token(chunk, TokenKind.UnknownRun));
+                return;
+            }
+            int i = 0;
+            while (i < chunk.Length)
+            {
+                int j = i + 1;
+                while (j < chunk.Length && ThaiChars.IsCombiningMark(chunk[j])) j++;
+                if (j < chunk.Length && ThaiChars.IsThaiPunctuation(chunk[j])) j++;
+                tokens.Add(new Token(chunk.Substring(i, j - i), TokenKind.Cluster));
+                i = j;
+            }
+        }
+
+        private static int CountClusters(string s)
+        {
+            int count = 0, i = 0;
+            while (i < s.Length)
+            {
+                int j = i + 1;
+                while (j < s.Length && ThaiChars.IsCombiningMark(s[j])) j++;
+                if (j < s.Length && ThaiChars.IsThaiPunctuation(s[j])) j++;
+                count++;
+                i = j;
+            }
+            return count;
         }
 
         /// <summary>Returns the text with U+200B inserted at safe Thai word boundaries.</summary>
@@ -156,7 +266,7 @@ namespace ThaiWrap
                 sb.Append(t.Text);
                 if (k == tokens.Count - 1) break;
                 var next = tokens[k + 1];
-                if (ShouldInsertBetween(t, next)) sb.Append(ThaiChars.ZeroWidthSpace);
+                if (ShouldInsertBetween(t, next)) sb.Append(_options.BreakChar);
             }
             return sb.ToString();
         }
