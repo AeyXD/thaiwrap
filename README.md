@@ -53,7 +53,7 @@ Options หลัก: `-f auto|text|csv|tsv|json|po|keyvalue` · `--columns "1,3
 **DP optimal segmentation** — หาการตัดคำที่ minimizes (จำนวนตัวอักษรนอกพจนานุกรม, จำนวนคำ) ภายใต้กฎพยัญชนะทวิภาคของไทย (ห้ามแยกสระ/วรรณยุกต์ออกจากพยัญชนะ ห้ามทิ้งสระหน้าท้ายบรรทัด ห้ามตัดก่อน ๆ/ฯ)
 
 - port จาก [ThaiW3Setup](https://github.com/AeyXD/ThaiW3Setup) (`core/thai_wrap.py`, MIT) ซึ่งใช้จริงใน production กับซับไทย The Witcher 3
-- คุณภาพ (เทียบ pythainlp/newmm, 40 ประโยคเกม): **precision 1.000 · recall 0.773 · F1 0.872** (เดิม greedy longest-match: P 0.936 · F1 0.866)
+- คุณภาพ (เทียบ pythainlp/newmm): **precision 1.000 · recall 0.773 · F1 0.872** บนชุดตัวอย่าง 40 ประโยคเกมที่วัด (เดิม greedy: P 0.936 · F1 0.866) — *ผลวัดบนชุดตัวอย่างเพื่อเปรียบเทียบอัลกอริทึม ไม่ใช่การรับประกันว่าถูกทุกข้อความ*
 - ตรวจสอบการ port: output ตรงกับต้นฉบับ Python เป๊ะ 41/42 ประโยค (ตัวที่ต่างคือเคส `{placeholder}` ที่ thaiwrap ปกป้องทั้งก้อนโดยเจตนา)
 
 ความปลอดภัย:

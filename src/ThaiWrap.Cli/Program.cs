@@ -37,6 +37,14 @@ namespace ThaiWrap.Cli
 
         public static int Main(string[] args)
         {
+            // ข้อความไทยของโปรแกรมต้องออกเป็น UTF-8 เสมอ — Windows console ปกติใช้ ANSI codepage
+            // (ผู้ใช้ cmd เก่าถ้าเห็นเพี้ยนให้สั่ง chcp 65001 — แต่ bytes ที่ได้จาก pipe/ไฟล์ถูกต้องเสมอ)
+            try
+            {
+                Console.OutputEncoding = Encoding.UTF8; // ครอบทั้ง stdout และ stderr
+            }
+            catch (IOException) { } // บาง environment ไม่มี console ผูกอยู่
+
             var cfg = new Config();
             try
             {
@@ -49,6 +57,21 @@ namespace ThaiWrap.Cli
                 return 2;
             }
 
+            try
+            {
+                return Run(cfg);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException ||
+                                       ex is FormatException || ex is ArgumentException)
+            {
+                // ค่า option ผิดที่ตรวจตอนใช้งาน (เช่น --columns 0) และปัญหาไฟล์ — ข้อความที่แก้ตามได้ + exit 2
+                Console.Error.WriteLine(ex.Message);
+                return 2;
+            }
+        }
+
+        private static int Run(Config cfg)
+        {
             cfg.WordList = ResolveWordList(cfg);
             if (!File.Exists(cfg.WordList))
             {
@@ -105,9 +128,9 @@ namespace ThaiWrap.Cli
                     case "--recursive":
                     case "-r": cfg.Recursive = true; break;
                     case "--inplace": cfg.InPlace = true; break;
-                    case "--max-diff": cfg.MaxDiff = int.Parse(Val(args, ref i)); break;
-                    case "--maxword": cfg.Options.MaxWordLength = int.Parse(Val(args, ref i)); break;
-                    case "--unknown-threshold": cfg.Options.UnknownBreakThreshold = int.Parse(Val(args, ref i)); break;
+                    case "--max-diff": cfg.MaxDiff = ParseInt(args, ref i, 0); break;
+                    case "--maxword": cfg.Options.MaxWordLength = ParseInt(args, ref i, 0); break;
+                    case "--unknown-threshold": cfg.Options.UnknownBreakThreshold = ParseInt(args, ref i, 1); break;
                     case "--stats": cfg.Stats = true; break;
                     case "--help":
                     case "-h":
@@ -128,6 +151,17 @@ namespace ThaiWrap.Cli
         {
             if (i + 1 >= args.Length) throw new ArgumentException("ขาดค่าหลัง " + args[i]);
             return args[++i];
+        }
+
+        /// <summary>แปลงค่า option เป็น int พร้อมข้อความไทยที่แก้ตามได้ + ตรวจค่าต่ำสุด</summary>
+        private static int ParseInt(string[] args, ref int i, int min)
+        {
+            string raw = Val(args, ref i);
+            if (!int.TryParse(raw, out int value))
+                throw new ArgumentException(args[i - 1] + " ต้องเป็นตัวเลข ได้รับ: " + raw);
+            if (value < min)
+                throw new ArgumentException(args[i - 1] + " ต้องไม่น้อยกว่า " + min + " ได้รับ: " + raw);
+            return value;
         }
 
         /// <summary>
@@ -314,7 +348,12 @@ namespace ThaiWrap.Cli
             {
                 string name = part.Trim();
                 if (name.Length == 0) continue;
-                if (name.All(char.IsDigit)) indices.Add(int.Parse(name));
+                if (name.All(char.IsDigit))
+                {
+                    if (!int.TryParse(name, out int col) || col < 1)
+                        throw new ArgumentException("--columns หมายเลขคอลัมน์เริ่มที่ 1 ได้รับ: " + name);
+                    indices.Add(col);
+                }
                 else names.Add(name);
             }
             if (indices.Count > 0) opts.ColumnIndices = indices;
@@ -339,17 +378,8 @@ namespace ThaiWrap.Cli
 
         // ---------- encoding / io ----------
 
-        private static (string text, Encoding enc) ReadTextWithBom(string path)
-        {
-            byte[] bytes = File.ReadAllBytes(path);
-            if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
-                return (Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3), new UTF8Encoding(true));
-            if (bytes.Length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
-                return (Encoding.Unicode.GetString(bytes, 2, bytes.Length - 2), Encoding.Unicode);
-            if (bytes.Length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
-                return (Encoding.BigEndianUnicode.GetString(bytes, 2, bytes.Length - 2), Encoding.BigEndianUnicode);
-            return (Encoding.UTF8.GetString(bytes), new UTF8Encoding(false));
-        }
+        private static (string text, Encoding enc) ReadTextWithBom(string path) =>
+            TextFileEncoding.Decode(File.ReadAllBytes(path));
 
         private static void WriteTextWithBom(string path, string text, Encoding enc)
         {

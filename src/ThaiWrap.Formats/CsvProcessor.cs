@@ -74,6 +74,7 @@ namespace ThaiWrap.Formats
         {
             public List<string> Fields = new List<string>();
             public string Terminator = "";
+            public bool Started; // เคยเห็น field นี้เริ่มขึ้นจริง (แม้จะว่างเปล่า เช่น "" ท้ายไฟล์)
         }
 
         private static List<Record> Parse(string input, char delim)
@@ -96,10 +97,10 @@ namespace ThaiWrap.Formats
                     }
                     field.Append(c); i++; continue;
                 }
-                if (c == '"') { inQuotes = true; i++; continue; }
+                if (c == '"') { inQuotes = true; rec.Started = true; i++; continue; }
                 if (c == delim)
                 {
-                    rec.Fields.Add(field.ToString()); field.Clear(); i++; continue;
+                    rec.Fields.Add(field.ToString()); field.Clear(); rec.Started = true; i++; continue;
                 }
                 if (c == '\r' || c == '\n')
                 {
@@ -109,9 +110,11 @@ namespace ThaiWrap.Formats
                     records.Add(rec); rec = new Record();
                     i += term.Length; continue;
                 }
-                field.Append(c); i++;
+                field.Append(c); rec.Started = true; i++;
             }
-            if (field.Length > 0 || rec.Fields.Count > 0)
+            // เก็บ record สุดท้ายเมื่อมันเริ่มขึ้นจริง (มีอักขระหรือ quote เปิด) แม้ไม่มี newline ปิด
+            // — record ว่างหลัง newline ท้ายไฟล์ยังถูกทิ้งตามเดิม
+            if (rec.Started || rec.Fields.Count > 0)
             {
                 rec.Fields.Add(field.ToString());
                 records.Add(rec);
@@ -122,12 +125,18 @@ namespace ThaiWrap.Formats
         private static string Serialize(List<Record> records, char delim)
         {
             var sb = new StringBuilder(records.Count * 32);
-            foreach (var r in records)
+            for (int rIdx = 0; rIdx < records.Count; rIdx++)
             {
+                var r = records[rIdx];
+                bool lastRecordNoNewline = rIdx == records.Count - 1 && r.Terminator.Length == 0;
                 for (int f = 0; f < r.Fields.Count; f++)
                 {
                     if (f > 0) sb.Append(delim);
-                    sb.Append(EscapeField(r.Fields[f], delim));
+                    // field ว่างเดี่ยวใน record สุดท้ายที่ไม่มี newline ปิด ต้องเขียนเป็น ""
+                    // ไม่งั้น output เป็นสตริงว่าง = record หายเวลา parse กลับ (กำกวมกับ "ไม่มี record")
+                    bool ambiguousEmpty = lastRecordNoNewline && f == r.Fields.Count - 1 &&
+                                          r.Fields[f].Length == 0 && r.Fields.Count == 1;
+                    sb.Append(ambiguousEmpty ? "\"\"" : EscapeField(r.Fields[f], delim));
                 }
                 sb.Append(r.Terminator);
             }

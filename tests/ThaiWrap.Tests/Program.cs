@@ -237,6 +237,30 @@ namespace ThaiWrap.Tests
             Check("filter: typewriter ทุกขั้น round-trip ถูก", typewriterOk, Show(built));
             Check("filter: typewriter จบแล้วได้ ZWSP ครบ", built.Contains(zw));
 
+            Console.WriteLine("== file safety ==");
+            // CSV: record ว่างท้ายไฟล์ที่เปิด-ปิด quote แล้ว ไม่มี newline ปิด ต้องไม่หาย
+            var tCsv = CsvProcessor.ParseTable("thai\r\n\"\"", ',');
+            Check("csv: record ว่างท้ายไฟล์ (\"\") ไม่หาย", tCsv.Count == 2 && tCsv[1].Count == 1 && tCsv[1][0] == "", tCsv.Count.ToString());
+            Check("csv: ผลลัพธ์คงจำนวน record",
+                CsvProcessor.Process("thai\r\n\"\"", new CsvOptions { ColumnIndices = new List<int> { 1 } }, s => s).Replace("\r\n", "\n") == "thai\n\"\"");
+            var tCsv2 = CsvProcessor.ParseTable("a,b\n", ',');
+            Check("csv: newline ท้ายไฟล์ยังไม่สร้าง record ว่างเกิน (regression)", tCsv2.Count == 1);
+
+            // Encoding: ไม่ใช่ UTF-8 และไม่มี BOM → ปฏิเสธ ไม่ใช่ยอมแทนอักขระเงียบๆ
+            try
+            {
+                TextFileEncoding.Decode(new byte[] { 0xBE, 0xD4, 0xB4, 0xD2, 0xCB }); // CP874 "ทดสอบ" แบบไม่มี BOM
+                Check("encoding: CP874 ไม่มี BOM ต้องโยน IOException", false);
+            }
+            catch (IOException) { Check("encoding: CP874 ไม่มี BOM ต้องโยน IOException", true); }
+            catch (Exception ex) { Check("encoding: CP874 ไม่มี BOM ต้องโยน IOException", false, ex.GetType().Name); }
+            var utf8 = TextFileEncoding.Decode(new byte[] { 0xEF, 0xBB, 0xBF }.Concat(Encoding.UTF8.GetBytes("ทดสอบ")).ToArray());
+            Check("encoding: UTF-8 BOM อ่านได้ คง BOM", utf8.Text == "ทดสอบ" && utf8.Enc.GetPreamble().Length == 3);
+            var plain = TextFileEncoding.Decode(Encoding.UTF8.GetBytes("ทดสอบ abc"));
+            Check("encoding: UTF-8 ไม่มี BOM อ่านได้ปกติ", plain.Text == "ทดสอบ abc" && plain.Enc.GetPreamble().Length == 0);
+            var utf16 = TextFileEncoding.Decode(new byte[] { 0xFF, 0xFE }.Concat(Encoding.Unicode.GetBytes("ทดสอบ")).ToArray());
+            Check("encoding: UTF-16 LE BOM อ่านได้", utf16.Text == "ทดสอบ");
+
             Console.WriteLine("== segmentation coverage ==");
             var allTokens = new List<Token>();
             foreach (var line in lines) allTokens.AddRange(seg.Tokenize(line));
