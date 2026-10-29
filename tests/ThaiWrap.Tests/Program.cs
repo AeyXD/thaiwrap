@@ -284,6 +284,39 @@ namespace ThaiWrap.Tests
             }
             finally { File.Delete(extraTmp); }
 
+            Console.WriteLine("== mispaste (วางคำแปลผิดแถว — เกณฑ์จาก production ของ W3) ==");
+            {
+                string sharedThai = "พายุโหระเหร่านำร่องพัดผ่านหมู่บ้านชายฝั่งอย่างรุนแรงจนบ้านเรือนถล่มราบเป็นหน้ากลอง"; // 69 ตัวอักษร ≥ 40
+                string enOwner = "A fierce storm swept through the coastal village, flattening all the houses."; // ยาวราวกับไทย → เจ้าของ
+                string enOther = "Deliver this sword to the captain."; // สั้นกว่าไทยมาก → ฝั่งวางผิดชัดเจน
+                var rows = new List<List<string>>
+                {
+                    new List<string> { "id", "en", "thai" },
+                    new List<string> { "1", "Good morning, traveler.", "สวัสดีผู้เดินทาง" },
+                    new List<string> { "2", enOwner, sharedThai },   // เจ้าของ (ความยาวเข้ากัน) = แถวไฟล์ 3
+                    new List<string> { "3", enOther, sharedThai },   // วางผิด (อังกฤษคนละเรื่อง) = แถวไฟล์ 4
+                    new List<string> { "4", "A huge blazing fireball!", "บอลไฟอันไพศาลและยิ่งใหญ่บันดาลใจให้กองทัพทหารทั้งหลายเกิดความหวังที่จะได้รับชัยชนะกลับคืนมาในที่สุด" },
+                    new List<string> { "5", "OK", "ตกลง" },
+                };
+                var hits = MispasteDetector.Detect(rows);
+                Check("mispaste: จับได้ 2 จุด (ไทยซ้ำ + ratio ผิดปกติ)", hits.Count == 2, string.Join(" / ", hits.ConvertAll(h => h.RowNo + ":" + h.Reason)));
+                var shared = hits.FirstOrDefault(h => h.OwnerRows.Count > 0);
+                Check("mispaste: ระบุแถวเจ้าของถูกต้อง (แถวไฟล์ 4 วางผิด เจ้าของคือแถวไฟล์ 3)",
+                    shared != null && shared.RowNo == 4 && shared.OwnerRows.Count == 1 && shared.OwnerRows[0] == 3,
+                    shared == null ? "-" : $"แถว {shared.RowNo} เจ้าของ {string.Join(",", shared.OwnerRows)}");
+                Check("mispaste: ratio ผิดปกติจับแถวที่ไทยยาวเกินอังกฤษมาก (แถวไฟล์ 5)",
+                    hits.Any(h => h.RowNo == 5 && h.OwnerRows.Count == 0));
+                Check("mispaste: แถวปกติ/สั้นไม่ถูกจับ (แถวไฟล์ 2 และ 6)",
+                    hits.All(h => h.RowNo != 2 && h.RowNo != 6));
+                var clean = MispasteDetector.Detect(new List<List<string>>
+                {
+                    new List<string> { "id", "en", "thai" },
+                    new List<string> { "1", "Hello there, my friend, how are you today?", "สวัสดีเพื่อนยายของฉันเต็มแก่วันนี้เป็นอย่างไรบ้าง" },
+                    new List<string> { "2", "Good bye, and good luck out there.", "ลาก่อนแล้วขอให้โชคดีนะที่นั่น" },
+                });
+                Check("mispaste: ตารางสะอาดไม่มีรายงาน", clean.Count == 0);
+            }
+
             Console.WriteLine("== formats: csv ==");
             string csv = File.ReadAllText("tests/samples/items.csv", Encoding.UTF8);
             var table0 = CsvProcessor.ParseTable(csv, ',');

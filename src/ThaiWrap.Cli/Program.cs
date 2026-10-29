@@ -27,6 +27,7 @@ namespace ThaiWrap.Cli
             public bool Recursive;
             public bool InPlace;
             public bool Normalize;
+            public bool Mispaste;
             public int MaxDiff = 40;
             public bool Stats;
             public ThaiWrapOptions Options = new ThaiWrapOptions();
@@ -77,6 +78,9 @@ namespace ThaiWrap.Cli
 
         private static int Run(Config cfg)
         {
+            // โหมดตรวจ "วางคำแปลผิดแถว" — ไม่ต้องใช้ word list (ตรวจโครงสร้างตารางล้วนๆ) ทำก่อนอื่น
+            if (cfg.Mispaste) return RunMispaste(cfg);
+
             cfg.WordList = ResolveWordList(cfg);
             if (!File.Exists(cfg.WordList))
             {
@@ -121,6 +125,42 @@ namespace ThaiWrap.Cli
             Console.Error.WriteLine("ไม่พบ input: " + cfg.InputPath);
             return 2;
         }
+
+        /// <summary>
+        /// รายงานแถวที่คำแปลน่าจะถูกวางผิดแถว (copy ของแถวอื่นมาวาง) — ข้อเสนออย่างเดียว ไม่แก้ไฟล์
+        /// เกณฑ์พิสูจน์แล้วบนคลังจริงของ ThaiW3Setup (จับ 31/31) · รองรับ csv/tsv ในเวอร์ชันนี้
+        /// </summary>
+        private static int RunMispaste(Config cfg)
+        {
+            if (cfg.InputPath == null || !File.Exists(cfg.InputPath))
+            {
+                Console.Error.WriteLine("--mispaste ต้องระบุไฟล์ csv/tsv ไฟล์เดียว (ไม่ใช่โฟลเดอร์/stdin)");
+                return 2;
+            }
+            string format = ResolveFormat(cfg, cfg.InputPath) ?? "";
+            if (format != "csv" && format != "tsv")
+            {
+                Console.Error.WriteLine("--mispaste รองรับ csv/tsv ในเวอร์ชันนี้ (ได้รับ: " + format + ")");
+                return 2;
+            }
+
+            (string input, _) = ReadTextWithBom(cfg.InputPath);
+            var table = CsvProcessor.ParseTable(input, format == "tsv" ? '\t' : DetectCsvDelimiter(input));
+            var hits = MispasteDetector.Detect(table);
+
+            Console.Error.WriteLine("--- ตรวจ \"วางคำแปลผิดแถว\": " + cfg.InputPath + " (" + table.Count + " แถว) — " +
+                hits.Count + " จุดน่าสงสัย · เป็นข้อเสนอ ตรวจด้วยตาก่อนแก้ที่ต้นทาง");
+            foreach (var h in hits)
+            {
+                Console.Error.WriteLine("  แถว " + h.RowNo + ": " + h.Reason);
+                Console.Error.WriteLine("    EN: " + Clip(h.English, 70));
+                Console.Error.WriteLine("    TH: " + Clip(h.Thai, 70));
+            }
+            return 0;
+        }
+
+        private static string Clip(string s, int max) =>
+            s.Length <= max ? s : s.Substring(0, max) + "…";
 
         // ---------- argument parsing ----------
 
@@ -179,6 +219,7 @@ namespace ThaiWrap.Cli
                     case "--max-diff": cfg.MaxDiff = ParseInt(args, ref i, 0); break;
                     case "--maxword": cfg.Options.MaxWordLength = ParseInt(args, ref i, 0); break;
                     case "--unknown-threshold": cfg.Options.UnknownBreakThreshold = ParseInt(args, ref i, 1); break;
+                    case "--mispaste": cfg.Mispaste = true; break;
                     case "--stats": cfg.Stats = true; break;
                     case "--help":
                     case "-h":
@@ -594,6 +635,7 @@ namespace ThaiWrap.Cli
             "  --max-diff <n>        จำนวนบรรทัด diff สูงสุดที่แสดง (default 40)\n" +
             "  --maxword <n>         ความยาวคำสูงสุดจากพจนานุกรม (default 0 = ไม่จำกัด)\n" +
             "  --unknown-threshold <n> จำนวน cluster ก่อนยอมให้ตัดคำนอกพจนานุกรม (default 8)\n" +
+            "  --mispaste           รายงานแถวที่คำแปลน่าจะวางผิดแถว (copy ของแถวอื่น) — csv/tsv, ข้อเสนออย่างเดียว\n" +
             "  --stats               สถิติเพิ่มเติมทาง stderr";
     }
 }

@@ -45,6 +45,11 @@ thaiwrap แก้ที่ตัวข้อความ: ตัดคำด้
 
 **รองรับไฟล์งานแปล 5 แบบ** — ดูรายละเอียดและวิธีเลือกไฟล์/คอลัมน์ที่หัวข้อ "ไฟล์งานแปลที่รองรับ"
 
+**ตรวจ "วางคำแปลผิดแถว"** (`--mispaste`) — ทีมแปล copy ข้อความของแถวอื่นมาวาง ทำให้คำแปลไม่ตรง
+ต้นฉบับและจุดตัดผิดทั้งแถว**โดยเงียบ** · ตรวจจากคู่อังกฤษ-ไทยใน csv/tsv (ไทยซ้ำกัน ≥40 ตัวแต่อังกฤษ
+ต่างเรื่อง · ความยาวไทย/อังกฤษนอกช่วง 0.2–3.5) เกณฑ์พิสูจน์แล้วบนคลังจริง (จับ 31/31 ใน W3) ·
+**เป็นข้อเสนออย่างเดียว** ตรวจด้วยตาก่อนแก้ที่ต้นทาง
+
 **แก้คำพิมพ์ผิดก่อนตัดคำ** (`--normalize`) — ข้อความไทยจริงจากทีมแปลมักมีรูปพิมพ์ผิด
 ที่โปรแกรมแสดงผล "ดูถูกต้อง" จนคนตาไม่เห็น แต่ทำให้ตัดคำพลาดทั้งย่อหน้า เช่น
 `เเ` แทน `แ` (เเท้), สระ/วรรณยุกต์ซ้อน (สวััสดี), `นํ้า` ที่จริงคือ `น้ำ` — เปิดใช้ด้วย
@@ -107,7 +112,7 @@ dotnet run --project src/ThaiWrap.Cli -- th.txt -f keyvalue -o th.out.txt
 (ถ้าใช้ binary จาก `publish/` แทน `dotnet run ... --` ด้วยชื่อไฟล์โปรแกรมตรงๆ เช่น
 `./ThaiWrap.Cli tests/samples/items.csv --columns thai --dry-run`)
 
-Options หลัก: `-f auto|text|csv|tsv|json|po|keyvalue` · `--columns "1,3" หรือ "ชื่อ"` · `--json-keys "desc,tooltip"` · `--break-char zwsp|hairspace|space` · `--chunk <n>` · `--min-len <n>` · `--normalize` · `--dry-run` (diff, ZWSP แสดงเป็น ·) · `-r` · `--inplace` (+.bak) · `--maxword` (0=ไม่จำกัด) · `--unknown-threshold` · `--stats`
+Options หลัก: `-f auto|text|csv|tsv|json|po|keyvalue` · `--columns "1,3" หรือ "ชื่อ"` · `--json-keys "desc,tooltip"` · `--break-char zwsp|hairspace|space` · `--chunk <n>` · `--min-len <n>` · `--normalize` · `--dry-run` (diff, ZWSP แสดงเป็น ·) · `--mispaste` (ตรวจวางผิดแถว) · `-r` · `--inplace` (+.bak) · `--maxword` (0=ไม่จำกัด) · `--unknown-threshold` · `--stats`
 
 ## ไฟล์งานแปลที่รองรับ
 
