@@ -154,6 +154,37 @@ namespace ThaiWrap.Tests
             Check("hairspace: กฎ fallback ใช้ได้กับ break char อื่น",
                 !h2.Contains("ฌ" + '\u200A') && h2.Contains('\u200A'));
 
+            Console.WriteLine("== normalize (เเ→แ + มาร์คซ้อน) ==");
+            Check("unit: เเ → แ ทุกคู่", ThaiNormalizer.Normalize("ของเเท้ราคาเเพง") == "ของแท้ราคาแพง");
+            Check("unit: เเเ → แเ (แทนทีละคู่จากซ้าย ไม่ซ้อนทับ)", ThaiNormalizer.Normalize("เเเ") == "แเ");
+            Check("unit: มาร์คซ้อนยุบเหลือตัวเดียว", ThaiNormalizer.Normalize("สวััสดีเป็็็นไปได้") == "สวัสดีเป็นไปได้");
+            Check("unit: า และพยัญชนะซ้อนไม่ถูกแตะ (ลากเสียง/อุทาน)",
+                ThaiNormalizer.Normalize("โอ๊ยยยย อาาา ฮั่กกกก") == "โอ๊ยยยย อาาา ฮั่กกกก");
+            Check("unit: มาร์คคนละชนิดติดกันไม่ถูกแตะ (ยังไม่มีกฎแก้ที่ปลอดภัย)",
+                ThaiNormalizer.Normalize("ทัิ") == "ทัิ");
+            string twice = ThaiNormalizer.Normalize(ThaiNormalizer.Normalize("ของเเท้สวััสดี"));
+            Check("unit: idempotent", twice == ThaiNormalizer.Normalize("ของเเท้สวััสดี"));
+            var cnt = ThaiNormalizer.Count("ของเเท้ราคาเเพงครับัั");
+            Check("unit: Count แยกเเ กับมาร์คซ้อน", cnt.DoubleE == 2 && cnt.DoubledMark == 1, cnt.Total.ToString());
+            Check("unit: Count นับ run ยาวเป็นจุดเดียว", ThaiNormalizer.Count("เร็็็็ด").DoubledMark == 1);
+
+            var segNorm = ThaiSegmenter.FromFile(wordList, new ThaiWrapOptions { Normalize = true });
+            string dirty = "อาวุธเเข็งแกร่งของเเผ่นดิน";
+            Check("default: ปิด normalize อนุรักษ์ข้อความเดิม (ไม่แก้ตัวอักษร)",
+                seg.InsertZwsp(dirty).Replace(zw.ToString(), "") == dirty);
+            string dirtyNorm = segNorm.InsertZwsp(dirty);
+            Check("normalize: strip ZWSP ได้ข้อความที่ยุบแล้ว", dirtyNorm.Replace(zw.ToString(), "") == ThaiNormalizer.Normalize(dirty), Show(dirtyNorm));
+            Check("normalize: ได้จุดตัดคืนมา", dirtyNorm.Contains(zw) && dirtyNorm.Contains("อาวุธ" + zw) && dirtyNorm.Contains("แข็งแกร่ง" + zw + "ของ"), Show(dirtyNorm));
+            Check("normalize: idempotent (รันซ้ำบนข้อความที่แก้แล้ว)", segNorm.InsertZwsp(dirtyNorm) == dirtyNorm);
+            string maskDirty = segNorm.InsertZwsp("ทดสอบ{เเทส}เเล็กน้อย");
+            Check("normalize: ไม่แตะข้างใน placeholder", maskDirty.Contains("{เเทส}"), Show(maskDirty));
+            Check("normalize: นอก placeholder ยังถูกแก้", maskDirty.Replace(zw.ToString(), "").Contains("ทดสอบ") && maskDirty.Replace(zw.ToString(), "").EndsWith("แล็กน้อย"), Show(maskDirty));
+            bool normRoundTrip = true;
+            foreach (var line in lines)
+                if (segNorm.InsertZwsp(line).Replace(zw.ToString(), "") != ThaiNormalizer.Normalize(line)) { normRoundTrip = false; break; }
+            Check("normalize: round-trip ทุกประโยคตัวอย่าง = ข้อความที่ยุบแล้ว", normRoundTrip);
+            Check("normalize: ประโยคสะอาดไม่เปลี่ยน (normalize = no-op)", segNorm.InsertZwsp(lines[0]) == seg.InsertZwsp(lines[0]));
+
             Console.WriteLine("== formats: csv ==");
             string csv = File.ReadAllText("tests/samples/items.csv", Encoding.UTF8);
             var table0 = CsvProcessor.ParseTable(csv, ',');

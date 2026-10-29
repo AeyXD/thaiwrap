@@ -29,5 +29,14 @@ namespace ThaiWrap
         /// U+200A hair space เพราะไม่นับ ZWSP เป็นจุดตัด และต้องเติม glyph ว่างให้ฟอนต์ด้วย
         /// </summary>
         public char BreakChar { get; set; } = '\u200B';
+
+        /// <summary>
+        /// ยุบรูปพิมพ์ผิดก่อนตัดคำ (เเ→แ, มาร์คซ้อนยุบเหลือตัวเดียว) — default false
+        /// เพราะแก้ตัวอักษรของผู้ใช้จริง ต่างจากการแทรก ZWSP ที่ลบออกแล้วได้ของเดิม:
+        /// คำผิดจะกลายเป็น unknown จน merge pass เกาะกินคำข้างเคียง จุดตัดจะถูกต้อง
+        /// เฉพาะเมื่อแก้คำก่อน — กฎทั้งหมดอยู่ที่ <see cref="ThaiNormalizer"/> (CLI: --normalize)
+        /// ชิ้นที่เป็น placeholder/แท็ก ({…} &lt;…&gt;) ไม่ถูก normalize ตามกฎปกป้องส่วนควบคุม
+        /// </summary>
+        public bool Normalize { get; set; }
     }
 }

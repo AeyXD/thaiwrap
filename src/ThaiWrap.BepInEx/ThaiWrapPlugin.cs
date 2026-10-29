@@ -14,18 +14,20 @@ namespace ThaiWrap.BepInEx
     {
         public const string PluginGuid = "thaiwrap.plugin";
         public const string PluginName = "ThaiWrap";
-        public const string PluginVersion = "0.4.1";
+        public const string PluginVersion = "0.5.0";
 
         internal static ThaiTextFilter? Filter;
         internal static ManualLogSource? Log;
 
         // ถูก bind ใน Awake() ตาม pattern ของ BepInEx — ไม่ใช่ใน constructor
         private ConfigEntry<bool>? _enabled;
+        private ConfigEntry<bool>? _normalize;
         private ConfigEntry<int>? _maxWordLength;
         private ConfigEntry<int>? _unknownBreakThreshold;
         private string? _wordListPath;
         private int _lastMaxWordLength;
         private int _lastUnknownThreshold;
+        private bool _lastNormalize;
 
         private void Awake()
         {
@@ -33,6 +35,8 @@ namespace ThaiWrap.BepInEx
 
             _enabled = Config.Bind("General", "Enabled", true,
                 "เปิด/ปิดการแทรก ZWSP ทั้งหมด (ไม่ต้องรีสตาร์ทเกม)");
+            _normalize = Config.Bind("Segmentation", "Normalize", false,
+                "ยุบรูปพิมพ์ผิดก่อนตัดคำ: เเ→แ และสระจ่อย/วรรณยุกต์ซ้อนยุบเหลือตัวเดียว (แก้ตัวอักษรจริง — ปิดไว้เพื่ออนุรักษ์ข้อความต้นฉบับ)");
             _maxWordLength = Config.Bind("Segmentation", "MaxWordLength", 0,
                 "ความยาวคำสูงสุดจากพจนานุกรม (0 = ไม่จำกัด — แนะนำสำหรับอัลกอริทึม DP)");
             _unknownBreakThreshold = Config.Bind("Segmentation", "UnknownBreakThreshold", 8,
@@ -49,11 +53,13 @@ namespace ThaiWrap.BepInEx
             {
                 var segmenter = ThaiSegmenter.FromFile(wordListPath, new ThaiWrapOptions
                 {
+                    Normalize = _normalize!.Value,
                     MaxWordLength = _maxWordLength!.Value,
                     UnknownBreakThreshold = _unknownBreakThreshold!.Value
                 });
                 Filter = new ThaiTextFilter(segmenter) { Enabled = _enabled.Value };
                 _wordListPath = wordListPath;
+                _lastNormalize = _normalize.Value;
                 _lastMaxWordLength = _maxWordLength.Value;
                 _lastUnknownThreshold = _unknownBreakThreshold.Value;
                 Logger.LogInfo($"โหลดพจนานุกรม {segmenter.WordCount} คำ จาก {wordListPath}");
@@ -77,15 +83,18 @@ namespace ThaiWrap.BepInEx
                 Filter.Enabled = _enabled.Value;
 
             // config การตัดคำเปลี่ยนกลางเกม → สร้าง segmenter ใหม่ทันที
-            if (_wordListPath != null && _maxWordLength != null && _unknownBreakThreshold != null &&
-                (_maxWordLength.Value != _lastMaxWordLength || _unknownBreakThreshold.Value != _lastUnknownThreshold))
+            if (_wordListPath != null && _maxWordLength != null && _unknownBreakThreshold != null && _normalize != null &&
+                (_maxWordLength.Value != _lastMaxWordLength || _unknownBreakThreshold.Value != _lastUnknownThreshold ||
+                 _normalize.Value != _lastNormalize))
             {
+                _lastNormalize = _normalize.Value;
                 _lastMaxWordLength = _maxWordLength.Value;
                 _lastUnknownThreshold = _unknownBreakThreshold.Value;
                 try
                 {
                     var segmenter = ThaiSegmenter.FromFile(_wordListPath, new ThaiWrapOptions
                     {
+                        Normalize = _lastNormalize,
                         MaxWordLength = _lastMaxWordLength,
                         UnknownBreakThreshold = _lastUnknownThreshold
                     });

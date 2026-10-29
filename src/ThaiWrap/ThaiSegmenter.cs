@@ -275,6 +275,7 @@ namespace ThaiWrap
 
         private string InsertZwspRaw(string text)
         {
+            if (_options.Normalize) text = ThaiNormalizer.Normalize(text);
             var tokens = Tokenize(text);
             var sb = new StringBuilder(text.Length + tokens.Count);
             for (int k = 0; k < tokens.Count; k++)
@@ -305,6 +306,7 @@ namespace ThaiWrap
 
         private string SegmentToStringRaw(string text, string separator)
         {
+            if (_options.Normalize) text = ThaiNormalizer.Normalize(text);
             var tokens = Tokenize(text);
             var sb = new StringBuilder();
             for (int k = 0; k < tokens.Count; k++)

@@ -38,13 +38,15 @@ export PATH="$HOME/.dotnet:$PATH" DOTNET_ROOT="$HOME/.dotnet"
 dotnet run --project src/ThaiWrap.Cli -- samples/game_sentences.txt -m sep | head
 
 # ไฟล์งานแปล: csv / tsv / json / po / key=value (XUnity) — ดูก่อนด้วย dry-run เสมอ
-dotnet run --project src/ThaiWrap.Cli -- data/items.csv --columns thai --dry-run
-dotnet run --project src/ThaiWrap.Cli -- data/items.csv --columns thai -o data/items.out.csv
+dotnet run --project src/ThaiWrap.Cli -- tests/samples/items.csv --columns thai --dry-run
+dotnet run --project src/ThaiWrap.Cli -- tests/samples/items.csv --columns thai -o /tmp/items.out.csv
 dotnet run --project src/ThaiWrap.Cli -- data/ -r                 # ทั้งโฟลเดอร์ → สร้าง *.zwsp.*
 dotnet run --project src/ThaiWrap.Cli -- th.txt -f keyvalue -o th.out.txt
 ```
 
-Options หลัก: `-f auto|text|csv|tsv|json|po|keyvalue` · `--columns "1,3" หรือ "ชื่อ"` · `--json-keys "desc,tooltip"` · `--break-char zwsp|hairspace` · `--dry-run` (diff, ZWSP แสดงเป็น ·) · `-r` · `--inplace` (+.bak) · `--maxword` (0=ไม่จำกัด) · `--unknown-threshold` · `--stats`
+Options หลัก: `-f auto|text|csv|tsv|json|po|keyvalue` · `--columns "1,3" หรือ "ชื่อ"` · `--json-keys "desc,tooltip"` · `--break-char zwsp|hairspace` · `--normalize` · `--dry-run` (diff, ZWSP แสดงเป็น ·) · `-r` · `--inplace` (+.bak) · `--maxword` (0=ไม่จำกัด) · `--unknown-threshold` · `--stats`
+
+**ข้อความพิมพ์ผิดจากทีมแปล → `--normalize`**: ข้อความไทยจริงมักมี `เ+เ` แทน `แ` (เเท้) และสระจ่อย/วรรณยุกต์ซ้อน (สวััสดี) — คำผิดกลายเป็น unknown จน merge pass เกาะกินคำข้างเคียง จนจุดตัดหลุดทั้งย่อหน้า (เช่น `ของ·เเท้·ราคา·เเพง`, `สวัั·สดี`) `--normalize` ยุบรูปเหล่านี้ก่อนตัดคำ (`ของ·เเท้·ราคา·เเพง` → `ของแท้·ราคาแพง`, `สวัสดี·เป็น·ทาส`) · รัน `--stats` เพื่อดูว่าอินพุตมีรูปพิมพ์ผิดกี่จุด · กฎมาจาก production ของ [ThaiW3Setup](https://github.com/AeyXD/ThaiW3Setup) (ตรวจทานกับทีมแปลแล้ว ปลอดภัยกับข้อความไทยทุกชิ้น: ไม่แตะ า ลากเสียง/พยัญชนะซ้อน) · เป็นการแก้ตัวอักษรจริง จึง default ปิด — placeholder `{…}` และแท็ก `<…>` ไม่ถูกแตะ
 
 **เกม Scaleform/Flash (เช่น Witcher 3)**: ZWSP ไม่เป็นจุดตัด ต้องใช้ `--break-char hairspace` (U+200A) และฟอนต์ต้องมี glyph ว่างที่ U+200A — ดูวิธีเต็มใน [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)
 

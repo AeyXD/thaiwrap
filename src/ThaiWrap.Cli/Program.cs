@@ -24,6 +24,7 @@ namespace ThaiWrap.Cli
             public bool DryRun;
             public bool Recursive;
             public bool InPlace;
+            public bool Normalize;
             public int MaxDiff = 40;
             public bool Stats;
             public ThaiWrapOptions Options = new ThaiWrapOptions();
@@ -33,6 +34,7 @@ namespace ThaiWrap.Cli
         {
             public int Files, ChangedFiles, ChangedLines;
             public long ZwspInserted;
+            public int DoubleE, DoubledMark; // รูปพิมพ์ผิดที่พบในอินพุต (นับเมื่อ --stats)
         }
 
         public static int Main(string[] args)
@@ -128,6 +130,10 @@ namespace ThaiWrap.Cli
                     case "--recursive":
                     case "-r": cfg.Recursive = true; break;
                     case "--inplace": cfg.InPlace = true; break;
+                    case "--normalize":
+                        cfg.Normalize = true;
+                        cfg.Options.Normalize = true;
+                        break;
                     case "--max-diff": cfg.MaxDiff = ParseInt(args, ref i, 0); break;
                     case "--maxword": cfg.Options.MaxWordLength = ParseInt(args, ref i, 0); break;
                     case "--unknown-threshold": cfg.Options.UnknownBreakThreshold = ParseInt(args, ref i, 1); break;
@@ -215,6 +221,9 @@ namespace ThaiWrap.Cli
 
             Console.Error.WriteLine("---");
             Console.Error.WriteLine($"ไฟล์ทั้งหมด {totals.Files} · เปลี่ยน {totals.ChangedFiles} · บรรทัดที่เปลี่ยน {totals.ChangedLines} · จุดตัดที่แทรก {totals.ZwspInserted}");
+            if (cfg.Stats && totals.DoubleE + totals.DoubledMark > 0)
+                Console.Error.WriteLine((cfg.Normalize ? "รูปพิมพ์ผิดที่แก้: " : "คำเตือน: พบรูปพิมพ์ผิด (แก้ด้วย --normalize): ") +
+                    $"เเ {totals.DoubleE} จุด · มาร์คซ้อน {totals.DoubledMark} จุด");
             return 0;
         }
 
@@ -275,7 +284,17 @@ namespace ThaiWrap.Cli
             }
 
             if (cfg.Stats)
-                Console.Error.WriteLine($"[{path}] format={format} changed={changed} {BreakName(brk)}+{inserted} dict={segmenter.WordCount}");
+            {
+                // นับจากอินพุตดิบทั้งไฟล์ — ค่าประมาณ (ไม่รู้เรื่อง mask/คอลัมน์ที่เลือก) แต่พอใช้เตือน
+                var issues = ThaiNormalizer.Count(input);
+                totals.DoubleE += issues.DoubleE;
+                totals.DoubledMark += issues.DoubledMark;
+                if (!cfg.Normalize && issues.Total > 0)
+                    Console.Error.WriteLine("คำเตือน: พบรูปพิมพ์ผิดที่กระทบการตัดคำ (เเ " + issues.DoubleE +
+                        " จุด, มาร์คซ้อน " + issues.DoubledMark + " จุด) — รันด้วย --normalize เพื่อแก้ก่อนตัด: " + path);
+                Console.Error.WriteLine($"[{path}] format={format} changed={changed} {BreakName(brk)}+{inserted} dict={segmenter.WordCount}" +
+                    (cfg.Normalize ? $" normalize[เเ {issues.DoubleE} · มาร์คซ้อน {issues.DoubledMark}]" : ""));
+            }
             return 0;
         }
 
@@ -443,6 +462,7 @@ namespace ThaiWrap.Cli
             "  --json-keys <list>    json: แปลงเฉพาะ value ใต้ key เหล่านี้ เช่น \"desc,tooltip\" — default ทุก string value\n" +
             "  --break-char <c>      zwsp (default) | hairspace — เกม Scaleform/Flash (เช่น Witcher 3) ต้องใช้ hairspace\n" +
             "  --dry-run             แสดง diff (ZWSP แสดงเป็น ·) โดยไม่เขียนไฟล์\n" +
+            "  --normalize           ยุบรูปพิมพ์ผิดก่อนตัดคำ: เเ→แ และมาร์คซ้อน (ัั ็็) เหลือตัวเดียว\n" +
             "  -r, --recursive       โหมด folder: เดินทั้งต้นไม้\n" +
             "  --inplace             โหมด folder: เขียนทับไฟล์เดิม + สำรอง .bak (default: สร้าง <ชื่อ>.zwsp.<ext>)\n" +
             "  --max-diff <n>        จำนวนบรรทัด diff สูงสุดที่แสดง (default 40)\n" +
