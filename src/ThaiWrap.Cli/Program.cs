@@ -34,7 +34,7 @@ namespace ThaiWrap.Cli
         {
             public int Files, ChangedFiles, ChangedLines;
             public long ZwspInserted;
-            public int DoubleE, DoubledMark; // รูปพิมพ์ผิดที่พบในอินพุต (นับเมื่อ --stats)
+            public ThaiTextIssues Issues = new ThaiTextIssues(); // รูปพิมพ์ผิดที่พบในอินพุต (นับเมื่อ --stats)
         }
 
         public static int Main(string[] args)
@@ -221,9 +221,16 @@ namespace ThaiWrap.Cli
 
             Console.Error.WriteLine("---");
             Console.Error.WriteLine($"ไฟล์ทั้งหมด {totals.Files} · เปลี่ยน {totals.ChangedFiles} · บรรทัดที่เปลี่ยน {totals.ChangedLines} · จุดตัดที่แทรก {totals.ZwspInserted}");
-            if (cfg.Stats && totals.DoubleE + totals.DoubledMark > 0)
-                Console.Error.WriteLine((cfg.Normalize ? "รูปพิมพ์ผิดที่แก้: " : "คำเตือน: พบรูปพิมพ์ผิด (แก้ด้วย --normalize): ") +
-                    $"เเ {totals.DoubleE} จุด · มาร์คซ้อน {totals.DoubledMark} จุด");
+            if (cfg.Stats && totals.Issues.Total + totals.Issues.WarningsTotal > 0)
+            {
+                var t = totals.Issues;
+                if (cfg.Normalize)
+                    Console.Error.WriteLine($"normalize แก้รวม {t.Total} จุด: เเ {t.DoubleE} · มาร์คซ้อน {t.DoubledMark} · ลำดับมาร์ค {t.MarkOrder} · ํ+า→ำ {t.SaraAm} · วรรณยุกต์หลังสระหน้า {t.StrayTone}");
+                else if (t.Total > 0)
+                    Console.Error.WriteLine($"คำเตือน: พบรูปพิมพ์ผิด {t.Total} จุด (แก้ด้วย --normalize)");
+                if (t.WarningsTotal > 0)
+                    Console.Error.WriteLine($"ต้องตรวจด้วยตา (กำกวม): สระ/วรรณยุกต์ต่างตัวซ้อน {t.MixedVowels + t.MixedTones} จุด · สระหน้า+มาร์ค {t.LeadingVowelMark} จุด");
+            }
             return 0;
         }
 
@@ -287,13 +294,26 @@ namespace ThaiWrap.Cli
             {
                 // นับจากอินพุตดิบทั้งไฟล์ — ค่าประมาณ (ไม่รู้เรื่อง mask/คอลัมน์ที่เลือก) แต่พอใช้เตือน
                 var issues = ThaiNormalizer.Count(input);
-                totals.DoubleE += issues.DoubleE;
-                totals.DoubledMark += issues.DoubledMark;
+                totals.Issues.DoubleE += issues.DoubleE;
+                totals.Issues.DoubledMark += issues.DoubledMark;
+                totals.Issues.MarkOrder += issues.MarkOrder;
+                totals.Issues.SaraAm += issues.SaraAm;
+                totals.Issues.StrayTone += issues.StrayTone;
+                totals.Issues.MixedVowels += issues.MixedVowels;
+                totals.Issues.MixedTones += issues.MixedTones;
+                totals.Issues.LeadingVowelMark += issues.LeadingVowelMark;
+
                 if (!cfg.Normalize && issues.Total > 0)
-                    Console.Error.WriteLine("คำเตือน: พบรูปพิมพ์ผิดที่กระทบการตัดคำ (เเ " + issues.DoubleE +
-                        " จุด, มาร์คซ้อน " + issues.DoubledMark + " จุด) — รันด้วย --normalize เพื่อแก้ก่อนตัด: " + path);
-                Console.Error.WriteLine($"[{path}] format={format} changed={changed} {BreakName(brk)}+{inserted} dict={segmenter.WordCount}" +
-                    (cfg.Normalize ? $" normalize[เเ {issues.DoubleE} · มาร์คซ้อน {issues.DoubledMark}]" : ""));
+                    Console.Error.WriteLine("คำเตือน: พบรูปพิมพ์ผิดที่กระทบการตัดคำ " + issues.Total + " จุด — รันด้วย --normalize เพื่อแก้ก่อนตัด: " + path);
+                if (issues.WarningsTotal > 0)
+                    Console.Error.WriteLine("ตรวจด้วยตา (กำกวม แก้อัตโนมัติไม่ได้): สระ/วรรณยุกต์ต่างตัวซ้อน " +
+                        (issues.MixedVowels + issues.MixedTones) + " จุด · สระหน้า+มาร์ค " + issues.LeadingVowelMark + " จุด: " + path);
+
+                Console.Error.WriteLine($"[{path}] format={format} changed={changed} {BreakName(brk)}+{inserted} dict={segmenter.WordCount}");
+                if (cfg.Normalize && issues.Total > 0)
+                    Console.Error.WriteLine("  normalize แก้ " + issues.Total + " จุด: เเ " + issues.DoubleE +
+                        " · มาร์คซ้อน " + issues.DoubledMark + " · ลำดับมาร์ค " + issues.MarkOrder +
+                        " · ํ+า→ำ " + issues.SaraAm + " · วรรณยุกต์หลังสระหน้า " + issues.StrayTone);
             }
             return 0;
         }
@@ -462,7 +482,7 @@ namespace ThaiWrap.Cli
             "  --json-keys <list>    json: แปลงเฉพาะ value ใต้ key เหล่านี้ เช่น \"desc,tooltip\" — default ทุก string value\n" +
             "  --break-char <c>      zwsp (default) | hairspace — เกม Scaleform/Flash (เช่น Witcher 3) ต้องใช้ hairspace\n" +
             "  --dry-run             แสดง diff (ZWSP แสดงเป็น ·) โดยไม่เขียนไฟล์\n" +
-            "  --normalize           ยุบรูปพิมพ์ผิดก่อนตัดคำ: เเ→แ และมาร์คซ้อน (ัั ็็) เหลือตัวเดียว\n" +
+            "  --normalize           ยุบรูปพิมพ์ผิดก่อนตัดคำ: เเ→แ · มาร์คซ้อน/ลำดับมาร์คผิด · ํ+า→ำ · วรรณยุกต์หลังสระหน้า\n" +
             "  -r, --recursive       โหมด folder: เดินทั้งต้นไม้\n" +
             "  --inplace             โหมด folder: เขียนทับไฟล์เดิม + สำรอง .bak (default: สร้าง <ชื่อ>.zwsp.<ext>)\n" +
             "  --max-diff <n>        จำนวนบรรทัด diff สูงสุดที่แสดง (default 40)\n" +

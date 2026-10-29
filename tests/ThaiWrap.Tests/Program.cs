@@ -156,6 +156,8 @@ namespace ThaiWrap.Tests
 
             Console.WriteLine("== normalize (เเ→แ + มาร์คซ้อน) ==");
             Check("unit: เเ → แ ทุกคู่", ThaiNormalizer.Normalize("ของเเท้ราคาเเพง") == "ของแท้ราคาแพง");
+            Check("unit: เเ ท้ายบรรทัดต้องถูกแก้แม้ เ แรกอยู่ในคำอื่น (บั๊ก pre-check เคยพลาดจริงในคลัง)",
+                ThaiNormalizer.Normalize("ข้าเริ่มโกรธเเล้วนะ") == "ข้าเริ่มโกรธแล้วนะ");
             Check("unit: เเเ → แเ (แทนทีละคู่จากซ้าย ไม่ซ้อนทับ)", ThaiNormalizer.Normalize("เเเ") == "แเ");
             Check("unit: มาร์คซ้อนยุบเหลือตัวเดียว", ThaiNormalizer.Normalize("สวััสดีเป็็็นไปได้") == "สวัสดีเป็นไปได้");
             Check("unit: า และพยัญชนะซ้อนไม่ถูกแตะ (ลากเสียง/อุทาน)",
@@ -167,6 +169,38 @@ namespace ThaiWrap.Tests
             var cnt = ThaiNormalizer.Count("ของเเท้ราคาเเพงครับัั");
             Check("unit: Count แยกเเ กับมาร์คซ้อน", cnt.DoubleE == 2 && cnt.DoubledMark == 1, cnt.Total.ToString());
             Check("unit: Count นับ run ยาวเป็นจุดเดียว", ThaiNormalizer.Count("เร็็็็ด").DoubledMark == 1);
+
+            Console.WriteLine("== normalize รอบ 2: ลำดับมาร์ค · ํ+า→ำ · วรรณยุกต์หลังสระหน้า ==");
+            // ทุกประโยคด้านล่างเป็นของจริงจากคลังแปล W3 (assets/translations.json.gz) ยกเว้นที่ระบุ
+            Check("ลำดับมาร์ค: วรรณยุกต์ก่อนสระบน (ท่ี)", ThaiNormalizer.Normalize("มาท่ีนี่") == "มาที่นี่");
+            Check("ลำดับมาร์ค: สอดแทรก (ที่ี่ — อยู่ทีี่ไหน)", ThaiNormalizer.Normalize("อยู่ทีี่ไหน") == "อยู่ที่ไหน");
+            Check("ลำดับมาร์ค: ั กับ วรรณยุกต์ สลับ (ทั่ั่ง — นกระทั่ั่ง)", ThaiNormalizer.Normalize("นกระทั่ั่ง") == "นกระทั่ง");
+            Check("ลำดับมาร์ค: สระ+วรรณยุกต์ซ้อนสองรอบ (ดิ้ิ้น — มันดิ้ิ้นอีก)", ThaiNormalizer.Normalize("มันดิ้ิ้นอีก") == "มันดิ้นอีก");
+            Check("ลำดับมาร์ค: ข้อความถูกอยู่แล้วไม่เปลี่ยน", ThaiNormalizer.Normalize("ที่นี่ทั่งไหนก็เป็นไปได้") == "ที่นี่ทั่งไหนก็เป็นไปได้");
+            Check("ํ+า→ำ: ไม่มีวรรณยุกต์ (คํานึง)", ThaiNormalizer.Normalize("ไม่คํานึงถึง") == "ไม่คำนึงถึง");
+            Check("ํ+า→ำ: วรรณยุกต์คั่น (นํ้า — ระบายนํ้า)", ThaiNormalizer.Normalize("ระบายนํ้า") == "ระบายน้ำ");
+            Check("ํ+า→ำ: วรรณยุกต์คั่นอีกรูป (ดํ่า — ดื่มดํ่า)", ThaiNormalizer.Normalize("ดื่มดํ่า") == "ดื่มด่ำ");
+            Check("ํ+า→ำ: วรรณยุกต์มาก่อน ํ (น้ํา)", ThaiNormalizer.Normalize("น้ําใส") == "น้ำใส");
+            Check("ํ ลอยไม่นำหน้า า ไม่ถูกแตะ (บาลี/สันสกฤต)", ThaiNormalizer.Normalize("สํ") == "สํ");
+            Check("วรรณยุกต์หลงหลังสระหน้า: มีตัวถูกอยู่แล้ว → ลบ (ไ่ม่ — ข้าไ่ม่มีวัน)",
+                ThaiNormalizer.Normalize("ข้าไ่ม่มีวันเสีย") == "ข้าไม่มีวันเสีย");
+            Check("วรรณยุกต์หลังสระหน้า: ไ่ด้ (นไปไมไ่ด้)", ThaiNormalizer.Normalize("ไ่ด้") == "ได้");
+            Check("สระหน้า+วรรณยุกต์ที่ต้องย้าย: ไม่แตะ (เ้วย — อีกเ้วย Geral…)",
+                ThaiNormalizer.Normalize("อีกเ้วย") == "อีกเ้วย");
+            string allDirty = "ข้าไ่ม่มีวันเเท้ มาท่ีนี่ ระบายนํ้า สวััสดีเป็็็น";
+            Check("รวมทุกกฎ + idempotent", ThaiNormalizer.Normalize(ThaiNormalizer.Normalize(allDirty)) == ThaiNormalizer.Normalize(allDirty));
+            var cnt2 = ThaiNormalizer.Count("มาท่ีนี่ นํ้า ไ่ม่ เหมืิอน คุู่ เสื้่อ อีกเ้วย");
+            Check("Count รอบ 2: แยกตระกูลที่แก้ได้",
+                cnt2.MarkOrder == 1 && cnt2.SaraAm == 1 && cnt2.StrayTone == 1, $"{cnt2.Total}");
+            Check("Count รอบ 2: คำเตือนเคสกำกวม",
+                cnt2.MixedVowels == 2 && cnt2.MixedTones == 1 && cnt2.LeadingVowelMark == 1, $"{cnt2.WarningsTotal}");
+            Check("Count: ข้อความสะอาด = ศูนย์ทุกช่อง",
+                new[] { "ที่นี่ทั่งไหน ไก่นี้ดี กระทั่ง ดิ้น ไม่มีวัน", "Hello World" }
+                    .All(s => { var c = ThaiNormalizer.Count(s); return c.Total == 0 && c.WarningsTotal == 0; }));
+            bool cleanCorpusStable = true;
+            foreach (var line in lines)
+                if (ThaiNormalizer.Normalize(line) != line) { cleanCorpusStable = false; break; }
+            Check("normalize: ประโยคตัวอย่างทั้งชุดผ่านกฎใหม่ไม่เปลี่ยนเลย", cleanCorpusStable);
 
             var segNorm = ThaiSegmenter.FromFile(wordList, new ThaiWrapOptions { Normalize = true });
             string dirty = "อาวุธเเข็งแกร่งของเเผ่นดิน";
@@ -184,6 +218,12 @@ namespace ThaiWrap.Tests
                 if (segNorm.InsertZwsp(line).Replace(zw.ToString(), "") != ThaiNormalizer.Normalize(line)) { normRoundTrip = false; break; }
             Check("normalize: round-trip ทุกประโยคตัวอย่าง = ข้อความที่ยุบแล้ว", normRoundTrip);
             Check("normalize: ประโยคสะอาดไม่เปลี่ยน (normalize = no-op)", segNorm.InsertZwsp(lines[0]) == seg.InsertZwsp(lines[0]));
+            Check("รอบ 2 integration: ลำดับมาร์ค — คำกลับเข้าพจนานุกรม",
+                segNorm.SegmentToString("มาท่ีนี่") == "มา|ที่นี่", segNorm.SegmentToString("มาท่ีนี่"));
+            Check("รอบ 2 integration: ํ+า→ำ — คำกลับเข้าพจนานุกรม (น้ำทิ้ง เป็นคำประสมใน dict)",
+                segNorm.SegmentToString("ระบายนํ้าทิ้ง") == "ระบาย|น้ำทิ้ง", segNorm.SegmentToString("ระบายนํ้าทิ้ง"));
+            Check("รอบ 2 integration: วรรณยุกต์หลังสระหน้า — คำกลับเข้าพจนานุกรม",
+                segNorm.SegmentToString("ข้าไ่ม่มีวันเสีย") == "ข้า|ไม่มี|วัน|เสีย", segNorm.SegmentToString("ข้าไ่ม่มีวันเสีย"));
 
             Console.WriteLine("== formats: csv ==");
             string csv = File.ReadAllText("tests/samples/items.csv", Encoding.UTF8);
