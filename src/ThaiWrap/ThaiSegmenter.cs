@@ -60,6 +60,53 @@ namespace ThaiWrap
             return new ThaiSegmenter(File.ReadAllLines(path), options);
         }
 
+        /// <summary>ผลการรวม word list หลักกับไฟล์คำเฉพาะโปรเจกต์ — ให้ผู้เรียกรายงาน +Added/−Removed ได้</summary>
+        public sealed class WordListMerge
+        {
+            public List<string> Words = new List<string>();
+            public int Added;
+            public int Removed;
+        }
+
+        /// <summary>
+        /// word list หลัก + ไฟล์คำเฉพาะโปรเจกต์ (เช่น words_extra.txt ที่ผู้ใช้วางเอง)
+        /// รูปแบบบรรทัด: "-คำ" = ลบคำนั้นออกจากพจนานุกรม (แก้คำที่แย่งพยางค์คำถัดไป เช่น
+        /// ใช้การ ทำให้ตัดเป็น "ใช้การ|เล่น" แทน "ใช้|การเล่น") · ขึ้นต้น '#' หรือว่าง = ข้าม ·
+        /// อื่นๆ = เพิ่มคำ — ชื่อเฉพาะ/ศัพท์วงการของแต่ละเกมต้องอยู่ที่ไฟล์นี้ ไม่ใส่ dict กลาง
+        /// </summary>
+        public static ThaiSegmenter FromFiles(string wordListPath, string extraWordsPath, ThaiWrapOptions? options = null)
+        {
+            return new ThaiSegmenter(MergeWordFiles(wordListPath, extraWordsPath).Words, options);
+        }
+
+        /// <summary>รวม word list หลักกับ extra (extraWordsPath เป็น null/ไม่มีไฟล์ = ใช้หลักอย่างเดียว) — การลบมีผลเสมอแม้คำอยู่ในไฟล์หลัก</summary>
+        public static WordListMerge MergeWordFiles(string wordListPath, string? extraWordsPath)
+        {
+            var merge = new WordListMerge();
+            var mainLines = File.ReadAllLines(wordListPath);
+            var mainSet = new HashSet<string>();
+            foreach (var line in mainLines) mainSet.Add(line.Trim());
+
+            var removed = new HashSet<string>();
+            if (extraWordsPath != null && File.Exists(extraWordsPath))
+            {
+                var addedSet = new HashSet<string>();
+                foreach (var line in File.ReadAllLines(extraWordsPath))
+                {
+                    string t = line.Trim();
+                    if (t.Length == 0 || t[0] == '#') continue;
+                    if (t[0] == '-' && t.Length > 1) { removed.Add(t.Substring(1)); continue; }
+                    if (!mainSet.Contains(t) && addedSet.Add(t)) merge.Words.Add(t); // กันซ้ำกับหลัก/ในตัวเอง
+                }
+                merge.Added = merge.Words.Count;
+                merge.Removed = removed.Count;
+            }
+
+            foreach (var line in mainLines)
+                if (!removed.Contains(line.Trim())) merge.Words.Add(line);
+            return merge;
+        }
+
         public ThaiWrapOptions Options => _options;
         public int WordCount => _wordCount;
 

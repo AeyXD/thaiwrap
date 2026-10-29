@@ -37,6 +37,7 @@ namespace ThaiWrap.Cli
             public int Files, ChangedFiles, ChangedLines;
             public long ZwspInserted;
             public ThaiTextIssues Issues = new ThaiTextIssues(); // รูปพิมพ์ผิดที่พบในอินพุต (นับเมื่อ --stats)
+            public Dictionary<string, int> UnknownCounts = new Dictionary<string, int>(); // คำนอกพจนานุกรม (เมื่อ --stats)
         }
 
         public static int Main(string[] args)
@@ -82,7 +83,20 @@ namespace ThaiWrap.Cli
                 Console.Error.WriteLine("ไม่พบ word list: " + cfg.WordList + " (ใช้ --words <path> หรือวาง data/words_th.txt ข้าง executable)");
                 return 2;
             }
-            var segmenter = ThaiSegmenter.FromFile(cfg.WordList, cfg.Options);
+            // words_extra.txt ของโปรเจกต์ (วางเอง — ดู FindWordsExtra) มีอยู่ก็ใช้เองอัตโนมัติ
+            string extraPath = FindWordsExtra(cfg.WordList);
+            ThaiSegmenter segmenter;
+            if (extraPath != null)
+            {
+                var merge = ThaiSegmenter.MergeWordFiles(cfg.WordList, extraPath);
+                segmenter = new ThaiSegmenter(merge.Words, cfg.Options);
+                Console.Error.WriteLine("คำเฉพาะโปรเจกต์: " + extraPath + " (+" + merge.Added + " −" + merge.Removed +
+                    ") — dict รวม " + segmenter.WordCount + " คำ");
+            }
+            else
+            {
+                segmenter = ThaiSegmenter.FromFile(cfg.WordList, cfg.Options);
+            }
             Func<string, string> transform = cfg.Mode == "sep"
                 ? (Func<string, string>)(s => segmenter.SegmentToString(s))
                 : s => segmenter.InsertZwsp(s);
@@ -96,7 +110,13 @@ namespace ThaiWrap.Cli
             }
 
             if (Directory.Exists(cfg.InputPath)) return RunFolder(cfg, transform, segmenter);
-            if (File.Exists(cfg.InputPath)) return RunFile(cfg, cfg.InputPath, cfg.OutputPath, transform, segmenter, new Totals());
+            if (File.Exists(cfg.InputPath))
+            {
+                var totals = new Totals();
+                int rc = RunFile(cfg, cfg.InputPath, cfg.OutputPath, transform, segmenter, totals);
+                if (cfg.Stats) PrintTopUnknowns(totals.UnknownCounts, "คำนอกพจนานุกรมที่พบบ่อยในไฟล์นี้", 10);
+                return rc;
+            }
 
             Console.Error.WriteLine("ไม่พบ input: " + cfg.InputPath);
             return 2;
@@ -253,6 +273,7 @@ namespace ThaiWrap.Cli
                 if (t.WarningsTotal > 0)
                     Console.Error.WriteLine($"ต้องตรวจด้วยตา (กำกวม): สระ/วรรณยุกต์ต่างตัวซ้อน {t.MixedVowels + t.MixedTones} จุด · สระหน้า+มาร์ค {t.LeadingVowelMark} จุด");
             }
+            if (cfg.Stats) PrintTopUnknowns(totals.UnknownCounts, "คำนอกพจนานุกรมที่พบบ่อย (พิจารณาเพิ่มใน words_extra.txt)", 20);
             return 0;
         }
 
@@ -316,6 +337,7 @@ namespace ThaiWrap.Cli
             {
                 // นับจากอินพุตดิบทั้งไฟล์ — ค่าประมาณ (ไม่รู้เรื่อง mask/คอลัมน์ที่เลือก) แต่พอใช้เตือน
                 var issues = ThaiNormalizer.Count(input);
+                CollectUnknowns(segmenter, input, totals.UnknownCounts);
                 totals.Issues.DoubleE += issues.DoubleE;
                 totals.Issues.DoubledMark += issues.DoubledMark;
                 totals.Issues.MarkOrder += issues.MarkOrder;
@@ -338,6 +360,66 @@ namespace ThaiWrap.Cli
                         " · ํ+า→ำ " + issues.SaraAm + " · วรรณยุกต์หลังสระหน้า " + issues.StrayTone);
             }
             return 0;
+        }
+
+        /// <summary>
+        /// หาไฟล์คำเฉพาะโปรเจกต์ที่ผู้ใช้วางเอง (ไม่ต้องใส่ option) — ลำดับ: data/ และรากของ
+        /// working directory → ข้าง word list หลัก (ครอบคลุม layout ของ binary ที่แจก) → ข้าง executable
+        /// </summary>
+        private static string? FindWordsExtra(string mainList)
+        {
+            string exeDir = AppContext.BaseDirectory;
+            string mainDir = Path.GetDirectoryName(Path.GetFullPath(mainList)) ?? "";
+            string[] candidates =
+            {
+                Path.Combine("data", "words_extra.txt"),
+                "words_extra.txt",
+                Path.Combine(mainDir, "words_extra.txt"),
+                Path.Combine(exeDir, "data", "words_extra.txt"),
+                Path.Combine(exeDir, "words_extra.txt"),
+            };
+            foreach (string c in candidates)
+                if (File.Exists(c)) return c;
+            return null;
+        }
+
+        /// <summary>นับความถี่คำนอกพจนานุกรม — รวมก้อน UnknownRun/Cluster ที่ติดกันกลับเป็นคำเดียวก่อนนับ</summary>
+        private static void CollectUnknowns(ThaiSegmenter segmenter, string input, Dictionary<string, int> into)
+        {
+            var sb = new StringBuilder();
+            foreach (var t in segmenter.Tokenize(input))
+            {
+                if (t.Kind == TokenKind.UnknownRun || t.Kind == TokenKind.Cluster)
+                {
+                    sb.Append(t.Text);
+                    continue;
+                }
+                if (sb.Length > 0)
+                {
+                    into.TryGetValue(sb.ToString(), out int n);
+                    into[sb.ToString()] = n + 1;
+                    sb.Length = 0;
+                }
+            }
+            if (sb.Length > 0)
+            {
+                into.TryGetValue(sb.ToString(), out int n);
+                into[sb.ToString()] = n + 1;
+            }
+        }
+
+        /// <summary>รายงานคำที่พบ ≥2 ครั้งเรียงตามความถี่ — ตัวชี้ว่าคำไหนควรเพิ่มใน words_extra.txt</summary>
+        private static void PrintTopUnknowns(Dictionary<string, int> counts, string label, int top)
+        {
+            var list = counts.Where(kv => kv.Value >= 2)
+                .OrderByDescending(kv => kv.Value)
+                .ThenBy(kv => kv.Key, StringComparer.Ordinal)
+                .Take(top)
+                .ToList();
+            if (list.Count == 0) return;
+            Console.Error.WriteLine(label + ":");
+            foreach (var kv in list)
+                Console.Error.WriteLine("  " + kv.Key + " ×" + kv.Value);
         }
 
         // ---------- format dispatch ----------

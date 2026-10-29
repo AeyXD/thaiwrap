@@ -258,6 +258,32 @@ namespace ThaiWrap.Tests
             Check("default: ไม่มี --chunk พฤติกรรมเดิมทุกรอยคำ (สูงสุด)",
                 seg.InsertZwsp(longThai).Count(ch => ch == zw) == seg.Tokenize(longThai).Count(t => t.Kind != TokenKind.Whitespace) - 1);
 
+            Console.WriteLine("== words_extra.txt (คำเฉพาะโปรเจกต์: +เพิ่ม −ลบ #คอมเมนต์) ==");
+            string extraTmp = Path.GetTempFileName();
+            try
+            {
+                File.WriteAllLines(extraTmp,
+                    new[] { "# คอมเมนต์และบรรทัดว่างต้องถูกข้าม", "จราจล", "-ใช้การ", "", "รำรึก" }, Encoding.UTF8);
+                var merge = ThaiSegmenter.MergeWordFiles(wordList, extraTmp);
+                Check("overlay: นับ +เพิ่ม −ลบ ถูก (ข้าม # และบรรทัดว่าง)",
+                    merge.Added == 2 && merge.Removed == 1, $"+{merge.Added} −{merge.Removed}");
+                var segExtra = new ThaiSegmenter(merge.Words);
+                Check("overlay: คำที่เพิ่มเข้าเป็นคำในพจนานุกรม (จราจล รำรึก)",
+                    segExtra.Tokenize("การจราจลกับความรำรึก").Any(t => (t.Text == "จราจล" || t.Text == "รำรึก") && t.Kind == TokenKind.DictionaryWord));
+                Check("overlay: ตัวเทียบ — dict หลักยังไม่มี จราจล (เทสจับผลจริง)",
+                    seg.Tokenize("การจราจลกับความรำรึก").All(t => t.Text != "จราจล" || t.Kind != TokenKind.DictionaryWord));
+                string w1Case = segExtra.SegmentToString("ใช้การเล่นเป็นประจำ");
+                Check("overlay: -ใช้การ แก้คำแย่งพยางค์ (เคสจริงจาก W1: ใช้การเล่น → ใช้|การ|เล่น)",
+                    !w1Case.Contains("ใช้การ") && w1Case.StartsWith("ใช้|", StringComparison.Ordinal), w1Case);
+                string baseCase = seg.SegmentToString("ใช้การเล่นเป็นประจำ");
+                Check("overlay: ตัวเทียบ — ไม่มี extra ยังติดกันเป็น ใช้การ", baseCase.Contains("ใช้การ"), baseCase);
+                Check("overlay: FromFiles ให้ผลเทียบเท่าการ merge เอง",
+                    ThaiSegmenter.FromFiles(wordList, extraTmp).WordCount == segExtra.WordCount);
+                Check("overlay: extra ไม่มีไฟล์ = ใช้ dict หลักเท่าเดิม",
+                    ThaiSegmenter.MergeWordFiles(wordList, null).Words.Count == File.ReadAllLines(wordList).Length);
+            }
+            finally { File.Delete(extraTmp); }
+
             Console.WriteLine("== formats: csv ==");
             string csv = File.ReadAllText("tests/samples/items.csv", Encoding.UTF8);
             var table0 = CsvProcessor.ParseTable(csv, ',');

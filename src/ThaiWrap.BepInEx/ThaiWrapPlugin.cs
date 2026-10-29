@@ -14,7 +14,7 @@ namespace ThaiWrap.BepInEx
     {
         public const string PluginGuid = "thaiwrap.plugin";
         public const string PluginName = "ThaiWrap";
-        public const string PluginVersion = "0.6.0";
+        public const string PluginVersion = "0.7.0";
 
         internal static ThaiTextFilter? Filter;
         internal static ManualLogSource? Log;
@@ -51,15 +51,10 @@ namespace ThaiWrap.BepInEx
 
             try
             {
-                var segmenter = ThaiSegmenter.FromFile(wordListPath, new ThaiWrapOptions
-                {
-                    Normalize = _normalize!.Value,
-                    MaxWordLength = _maxWordLength!.Value,
-                    UnknownBreakThreshold = _unknownBreakThreshold!.Value
-                });
+                var segmenter = CreateSegmenter(wordListPath);
                 Filter = new ThaiTextFilter(segmenter) { Enabled = _enabled.Value };
                 _wordListPath = wordListPath;
-                _lastNormalize = _normalize.Value;
+                _lastNormalize = _normalize!.Value;
                 _lastMaxWordLength = _maxWordLength.Value;
                 _lastUnknownThreshold = _unknownBreakThreshold.Value;
                 Logger.LogInfo($"โหลดพจนานุกรม {segmenter.WordCount} คำ จาก {wordListPath}");
@@ -92,12 +87,7 @@ namespace ThaiWrap.BepInEx
                 _lastUnknownThreshold = _unknownBreakThreshold.Value;
                 try
                 {
-                    var segmenter = ThaiSegmenter.FromFile(_wordListPath, new ThaiWrapOptions
-                    {
-                        Normalize = _lastNormalize,
-                        MaxWordLength = _lastMaxWordLength,
-                        UnknownBreakThreshold = _lastUnknownThreshold
-                    });
+                    var segmenter = CreateSegmenter(_wordListPath);
                     Filter = new ThaiTextFilter(segmenter) { Enabled = _enabled?.Value ?? true };
                     Log?.LogInfo($"โหลดพจนานุกรมใหม่ ({segmenter.WordCount} คำ) ตาม config ที่เปลี่ยน");
                 }
@@ -106,6 +96,24 @@ namespace ThaiWrap.BepInEx
                     Log?.LogError("โหลดใหม่ตาม config ไม่สำเร็จ (คงใช้ตัวเดิม): " + ex.Message);
                 }
             }
+        }
+
+        /// <summary>สร้าง segmenter จาก word list + words_extra.txt ที่วางข้างกัน (มีอยู่ก็ใช้เอง)</summary>
+        private static ThaiSegmenter CreateSegmenter(string wordListPath)
+        {
+            string extra = Path.Combine(Path.GetDirectoryName(wordListPath) ?? "", "words_extra.txt");
+            var options = new ThaiWrapOptions
+            {
+                Normalize = _normalize?.Value ?? false,
+                MaxWordLength = _maxWordLength?.Value ?? 0,
+                UnknownBreakThreshold = _unknownBreakThreshold?.Value ?? 8
+            };
+            if (File.Exists(extra))
+            {
+                Log?.LogInfo("คำเฉพาะโปรเจกต์: " + extra);
+                return ThaiSegmenter.FromFiles(wordListPath, extra, options);
+            }
+            return ThaiSegmenter.FromFile(wordListPath, options);
         }
 
         /// <summary>ค้นหา word list: ข้าง DLL ก่อน แล้วตามโฟลเดอร์ plugins ของ BepInEx</summary>
