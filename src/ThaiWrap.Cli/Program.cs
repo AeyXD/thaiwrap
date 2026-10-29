@@ -28,6 +28,7 @@ namespace ThaiWrap.Cli
             public bool InPlace;
             public bool Normalize;
             public bool Mispaste;
+            public bool Check;
             public int MaxDiff = 40;
             public bool Stats;
             public ThaiWrapOptions Options = new ThaiWrapOptions();
@@ -39,6 +40,7 @@ namespace ThaiWrap.Cli
             public long ZwspInserted;
             public ThaiTextIssues Issues = new ThaiTextIssues(); // รูปพิมพ์ผิดที่พบในอินพุต (นับเมื่อ --stats)
             public Dictionary<string, int> UnknownCounts = new Dictionary<string, int>(); // คำนอกพจนานุกรม (เมื่อ --stats)
+            public int CheckDirty; // ไฟล์ที่ยังมีข้อความไทยไม่ถูกแตรป (เมื่อ --check)
         }
 
         public static int Main(string[] args)
@@ -107,6 +109,11 @@ namespace ThaiWrap.Cli
 
             if (cfg.InputPath == null)
             {
+                if (cfg.Check)
+                {
+                    Console.Error.WriteLine("--check ใช้กับไฟล์/โฟลเดอร์ (ไม่ใช่ stdin)");
+                    return 2;
+                }
                 // stdin → stdout (โหมด text เท่านั้น)
                 string input = Console.In.ReadToEnd();
                 Console.Out.Write(ProcessContent(input, "text", cfg, transform));
@@ -119,6 +126,11 @@ namespace ThaiWrap.Cli
                 var totals = new Totals();
                 int rc = RunFile(cfg, cfg.InputPath, cfg.OutputPath, transform, segmenter, totals);
                 if (cfg.Stats) PrintTopUnknowns(totals.UnknownCounts, "คำนอกพจนานุกรมที่พบบ่อยในไฟล์นี้", 10);
+                if (cfg.Check)
+                {
+                    if (totals.CheckDirty > 0) return 1;
+                    Console.Error.WriteLine("ผ่าน: ข้อความไทยถูกแตรปครบแล้ว (" + cfg.InputPath + ")");
+                }
                 return rc;
             }
 
@@ -220,6 +232,7 @@ namespace ThaiWrap.Cli
                     case "--maxword": cfg.Options.MaxWordLength = ParseInt(args, ref i, 0); break;
                     case "--unknown-threshold": cfg.Options.UnknownBreakThreshold = ParseInt(args, ref i, 1); break;
                     case "--mispaste": cfg.Mispaste = true; break;
+                    case "--check": cfg.Check = true; break;
                     case "--stats": cfg.Stats = true; break;
                     case "--help":
                     case "-h":
@@ -315,6 +328,16 @@ namespace ThaiWrap.Cli
                     Console.Error.WriteLine($"ต้องตรวจด้วยตา (กำกวม): สระ/วรรณยุกต์ต่างตัวซ้อน {t.MixedVowels + t.MixedTones} จุด · สระหน้า+มาร์ค {t.LeadingVowelMark} จุด");
             }
             if (cfg.Stats) PrintTopUnknowns(totals.UnknownCounts, "คำนอกพจนานุกรมที่พบบ่อย (พิจารณาเพิ่มใน words_extra.txt)", 20);
+            if (cfg.Check)
+            {
+                if (totals.CheckDirty > 0)
+                {
+                    Console.Error.WriteLine("---");
+                    Console.Error.WriteLine("ตรวจไม่ผ่าน: " + totals.CheckDirty + "/" + totals.Files + " ไฟล์ยังมีข้อความไทยไม่ถูกแตรป");
+                    return 1;
+                }
+                Console.Error.WriteLine("ตรวจผ่าน: " + totals.Files + " ไฟล์ แตรปครบทุกไฟล์");
+            }
             return 0;
         }
 
@@ -336,6 +359,17 @@ namespace ThaiWrap.Cli
             long inserted = CountBreak(output, brk) - CountBreak(input, brk);
             if (changed) { totals.ChangedFiles++; totals.ChangedLines += CountChangedLines(input, output); }
             totals.ZwspInserted += Math.Max(0, inserted);
+
+            if (cfg.Check)
+            {
+                // โหมด lint: ไม่เขียนอะไร — แจ้งเฉพาะไฟล์ที่ยังมีข้อความไทยไม่ถูกแตรป แล้วให้ exit 1 ที่ระดับ run
+                if (changed)
+                {
+                    totals.CheckDirty++;
+                    Console.Error.WriteLine("ยังไม่ถูกแตรป: " + path);
+                }
+                return 0;
+            }
 
             if (cfg.DryRun)
             {
@@ -636,6 +670,7 @@ namespace ThaiWrap.Cli
             "  --maxword <n>         ความยาวคำสูงสุดจากพจนานุกรม (default 0 = ไม่จำกัด)\n" +
             "  --unknown-threshold <n> จำนวน cluster ก่อนยอมให้ตัดคำนอกพจนานุกรม (default 8)\n" +
             "  --mispaste           รายงานแถวที่คำแปลน่าจะวางผิดแถว (copy ของแถวอื่น) — csv/tsv, ข้อเสนออย่างเดียว\n" +
+            "  --check              โหมดตรวจแบบ lint: ไม่เขียนอะไร exit 1 ถ้ายังมีข้อความไทยไม่ถูกแตรป — ใช้ใน CI/pre-commit\n" +
             "  --stats               สถิติเพิ่มเติมทาง stderr";
     }
 }
