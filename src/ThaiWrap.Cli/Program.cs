@@ -41,6 +41,7 @@ namespace ThaiWrap.Cli
             public ThaiTextIssues Issues = new ThaiTextIssues(); // รูปพิมพ์ผิดที่พบในอินพุต (นับเมื่อ --stats)
             public Dictionary<string, int> UnknownCounts = new Dictionary<string, int>(); // คำนอกพจนานุกรม (เมื่อ --stats)
             public int CheckDirty; // ไฟล์ที่ยังมีข้อความไทยไม่ถูกแตรป (เมื่อ --check)
+            public Dictionary<string, int> RalSuggestions = new Dictionary<string, int>(); // ข้อเสนอ ร↔ล (เมื่อ --stats)
         }
 
         public static int Main(string[] args)
@@ -126,6 +127,7 @@ namespace ThaiWrap.Cli
                 var totals = new Totals();
                 int rc = RunFile(cfg, cfg.InputPath, cfg.OutputPath, transform, segmenter, totals);
                 if (cfg.Stats) PrintTopUnknowns(totals.UnknownCounts, "คำนอกพจนานุกรมที่พบบ่อยในไฟล์นี้", 10);
+                if (cfg.Stats) PrintTopSuggestions(totals.RalSuggestions, "คำที่น่าจะพิมพ์สลับ ร↔ล (ข้อเสนอ — ตรวจบริบทก่อนแก้)", 8);
                 if (cfg.Check)
                 {
                     if (totals.CheckDirty > 0) return 1;
@@ -328,6 +330,7 @@ namespace ThaiWrap.Cli
                     Console.Error.WriteLine($"ต้องตรวจด้วยตา (กำกวม): สระ/วรรณยุกต์ต่างตัวซ้อน {t.MixedVowels + t.MixedTones} จุด · สระหน้า+มาร์ค {t.LeadingVowelMark} จุด");
             }
             if (cfg.Stats) PrintTopUnknowns(totals.UnknownCounts, "คำนอกพจนานุกรมที่พบบ่อย (พิจารณาเพิ่มใน words_extra.txt)", 20);
+            if (cfg.Stats) PrintTopSuggestions(totals.RalSuggestions, "คำที่น่าจะพิมพ์สลับ ร↔ล (ข้อเสนอ — ตรวจบริบทก่อนแก้)", 15);
             if (cfg.Check)
             {
                 if (totals.CheckDirty > 0)
@@ -413,6 +416,7 @@ namespace ThaiWrap.Cli
                 // นับจากอินพุตดิบทั้งไฟล์ — ค่าประมาณ (ไม่รู้เรื่อง mask/คอลัมน์ที่เลือก) แต่พอใช้เตือน
                 var issues = ThaiNormalizer.Count(input);
                 CollectUnknowns(segmenter, input, totals.UnknownCounts);
+                CollectRalSuggestions(segmenter, input, totals.RalSuggestions);
                 totals.Issues.DoubleE += issues.DoubleE;
                 totals.Issues.DoubledMark += issues.DoubledMark;
                 totals.Issues.MarkOrder += issues.MarkOrder;
@@ -485,6 +489,49 @@ namespace ThaiWrap.Cli
 
         /// <summary>รายงานคำที่พบ ≥2 ครั้งเรียงตามความถี่ — ตัวชี้ว่าคำไหนควรเพิ่มใน words_extra.txt</summary>
         private static void PrintTopUnknowns(Dictionary<string, int> counts, string label, int top)
+        {
+            var list = counts.Where(kv => kv.Value >= 2)
+                .OrderByDescending(kv => kv.Value)
+                .ThenBy(kv => kv.Key, StringComparer.Ordinal)
+                .Take(top)
+                .ToList();
+            if (list.Count == 0) return;
+            Console.Error.WriteLine(label + ":");
+            foreach (var kv in list)
+                Console.Error.WriteLine("  " + kv.Key + " ×" + kv.Value);
+        }
+
+        /// <summary>
+        /// เสนอคำแก้การสลับ ร↔ล — รวม token ไทยติดกัน 1–3 ตัวแล้วลองสลับ (พอร์ต pass 1–2 ของ
+        /// find_ral_swaps.py ของ W3): การพิมพ์ผิดแบบ "บุกลุก" ตัดออกมาเป็นคำจริงสองคำ จึงต้องรวมก่อนเช็ค
+        /// </summary>
+        private static void CollectRalSuggestions(ThaiSegmenter segmenter, string input, Dictionary<string, int> into)
+        {
+            var tokens = segmenter.Tokenize(input);
+            for (int i = 0; i < tokens.Count; i++)
+            {
+                if (!IsThaiToken(tokens[i])) continue;
+                var sb = new StringBuilder();
+                for (int span = 0; span < 3 && i + span < tokens.Count; span++)
+                {
+                    if (!IsThaiToken(tokens[i + span])) break;
+                    sb.Append(tokens[i + span].Text);
+                    if (span == 0 && sb.Length < 3) continue; // token เดี่ยวต้องยาวพอ
+                    string? sug = segmenter.SuggestRalSwap(sb.ToString());
+                    if (sug != null)
+                    {
+                        string key = sb + " → " + sug;
+                        into.TryGetValue(key, out int n);
+                        into[key] = n + 1;
+                    }
+                }
+            }
+        }
+
+        private static bool IsThaiToken(Token t) =>
+            t.Kind == TokenKind.DictionaryWord || t.Kind == TokenKind.UnknownRun || t.Kind == TokenKind.Cluster;
+
+        private static void PrintTopSuggestions(Dictionary<string, int> counts, string label, int top)
         {
             var list = counts.Where(kv => kv.Value >= 2)
                 .OrderByDescending(kv => kv.Value)

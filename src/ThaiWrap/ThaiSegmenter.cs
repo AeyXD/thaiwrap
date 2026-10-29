@@ -110,6 +110,39 @@ namespace ThaiWrap
         public ThaiWrapOptions Options => _options;
         public int WordCount => _wordCount;
 
+        /// <summary>คำนี้อยู่ในพจนานุกรม (รวม words_extra.txt) หรือไม่ — ใช้กับการตรวจ/เสนอการสะกด</summary>
+        public bool IsKnownWord(string word)
+        {
+            var node = _root;
+            foreach (char c in word)
+            {
+                if (node.Children == null || !node.Children.TryGetValue(c, out node)) return false;
+            }
+            return node.End;
+        }
+
+        /// <summary>
+        /// ข้อเสนอแก้คำสะกดสลับ ร↔ล หนึ่งตำแหน่ง: ถ้า token ไม่อยู่ในพจนานุกรม แต่สลับ ร↔ล
+        /// ตำแหน่งใดตำแหน่งหนึ่งแล้วกลายเป็นคำจริง คืนคำนั้น (null = ไม่มีข้อเสนอ)
+        /// พอร์ตจาก find_ral_swaps.py ของ ThaiW3Setup (MIT) — **ข้อเสนออย่างเดียว** เพราะต้องดูบริบท:
+        /// "ตลอดการเลย" ถูกส่วน "ตลอดกาลเลย" ผิด · คลาสนี้ตัวตรวจคำสะกดทั่วไปจับไม่ได้เพราะทุกพยางค์
+        /// เป็นคำจริง (บุกลุก = บุก+ลุก ทั้งคู่มีในพจนานุกรม)
+        /// </summary>
+        public string? SuggestRalSwap(string token)
+        {
+            if (token == null || token.Length < 3 || IsKnownWord(token)) return null;
+            var sb = new StringBuilder(token);
+            for (int i = 0; i < token.Length; i++)
+            {
+                char c = token[i];
+                if (c != '\u0E23' && c != '\u0E25') continue; // ร / ล
+                sb[i] = c == '\u0E23' ? '\u0E25' : '\u0E23';
+                if (IsKnownWord(sb.ToString())) return sb.ToString();
+                sb[i] = c;
+            }
+            return null;
+        }
+
         /// <summary>Tokenizes the full text; tokens concatenate back to the original string.</summary>
         public List<Token> Tokenize(string text)
         {

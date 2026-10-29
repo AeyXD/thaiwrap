@@ -317,6 +317,13 @@ namespace ThaiWrap.Tests
                 Check("mispaste: ตารางสะอาดไม่มีรายงาน", clean.Count == 0);
             }
 
+            Console.WriteLine("== ร↔ล suggester (ข้อเสนอการสะกด — พอร์ตจาก find_ral_swaps ของ W3) ==");
+            Check("ral: IsKnownWord ถูก (มี/ไม่มีใน dict)", seg.IsKnownWord("กระบี่") && !seg.IsKnownWord("บุกลุก"));
+            Check("ral: บุกลุก → บุกรุก (เคสจริงจาก W3 — ทุกพยางค์เป็นคำจริงจึงรอดตัวตรวจคำสะกด)",
+                seg.SuggestRalSwap("บุกลุก") == "บุกรุก", seg.SuggestRalSwap("บุกลุก") ?? "-");
+            Check("ral: คำที่ถูกอยู่แล้วไม่เสนอ (null)", seg.SuggestRalSwap("บุกรุก") == null && seg.SuggestRalSwap("กระบี่") == null);
+            Check("ral: คำสั้น/ไม่มี ร ล ไม่เสนอ", seg.SuggestRalSwap("กก") == null && seg.SuggestRalSwap("เดินไป") == null);
+
             Console.WriteLine("== formats: csv ==");
             string csv = File.ReadAllText("tests/samples/items.csv", Encoding.UTF8);
             var table0 = CsvProcessor.ParseTable(csv, ',');
