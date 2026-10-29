@@ -84,7 +84,7 @@ namespace ThaiWrap.Cli
                 return 2;
             }
             // words_extra.txt ของโปรเจกต์ (วางเอง — ดู FindWordsExtra) มีอยู่ก็ใช้เองอัตโนมัติ
-            string extraPath = FindWordsExtra(cfg.WordList);
+            string? extraPath = FindWordsExtra(cfg.WordList);
             ThaiSegmenter segmenter;
             if (extraPath != null)
             {
