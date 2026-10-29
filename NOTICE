@@ -7,7 +7,12 @@ thaiwrap — ส่วนประกอบของบุคคลที่ส�
      https://www.unicode.org/license.txt
    ใช้ซ้ำ/แก้ไขได้ตามเงื่อนไขของทั้งสองใบอนุญาต
 
-2) web/fonts/Sarabun-Regular.ttf, web/fonts/Kanit-Regular.ttf
+2) src/ThaiWrap/ThaiChunker.cs — ตารางกฎผูกคำ (BIND_NEXT/BIND_PREV/GOOD_BEFORE)
+   และโครง DP กลุ่มวลี พอร์ตจาก ThaiW1Setup (MIT)
+   https://github.com/AeyXD/ThaiW1Setup — scripts/thai_wrap.py
+   ซึ่งพิสูจน์แล้วในเกมจริงกับ The Witcher: Enhanced Edition (เอนจิน Aurora)
+
+3) web/fonts/Sarabun-Regular.ttf, web/fonts/Kanit-Regular.ttf
    ฟอนต์ดั้งเดิมจาก Google Fonts ภายใต้ SIL Open Font License 1.1
    ผู้สร้าง: Cadson Demak (https://cadsondemak.github.io/)
 

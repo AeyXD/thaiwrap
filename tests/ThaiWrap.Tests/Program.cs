@@ -225,6 +225,39 @@ namespace ThaiWrap.Tests
             Check("รอบ 2 integration: วรรณยุกต์หลังสระหน้า — คำกลับเข้าพจนานุกรม",
                 segNorm.SegmentToString("ข้าไ่ม่มีวันเสีย") == "ข้า|ไม่มี|วัน|เสีย", segNorm.SegmentToString("ข้าไ่ม่มีวันเสีย"));
 
+            Console.WriteLine("== phrase-chunk + space mode (เอนจินที่ตัดเฉพาะ ASCII space — พอร์ตจาก ThaiW1Setup) ==");
+            var segSpace = ThaiSegmenter.FromFile(wordList, new ThaiWrapOptions
+            {
+                BreakChar = ' ', MaxChunk = 12, MinThaiLength = 40
+            });
+            Check("space: ข้อความสั้นไม่ถูกแตะ (min-len กัน 'เกม ใหม่' กลางป้าย)",
+                segSpace.InsertZwsp("เกมใหม่") == "เกมใหม่" && segSpace.InsertZwsp("ค่าป้องกันสูง") == "ค่าป้องกันสูง");
+            string longThai = "นักผจญเหตุการณ์วิเศษพาเพื่อนๆเดินทางข้ามป่าลึกเพื่อตามหาสมบัติโบราณที่สาบสูญมานานหลายร้อยปี";
+            string sp = segSpace.InsertZwsp(longThai);
+            Check("space: ข้อความยาวได้ช่องว่าง และตัดออกแล้วได้ข้อความเดิม", sp.Contains(" ") && sp.Replace(" ", "") == longThai, sp);
+            Check("space: ทุกกลุ่มวลี ≤ 12+8 ตัวอักษร (เพดานแข็งของ DP)",
+                sp.Split(' ').All(seg => seg.Count(ThaiChars.IsThaiRange) <= 20), sp);
+            Check("space: ไม่มีช่องว่างซ้อน/ติดช่องว่างเดิม", !sp.Contains("  ") && !longThai.Contains(" "));
+            Check("space: เว้นแบบกลุ่มวลี ไม่ใช่ทุกคำ (จุดเว้นน้อยกว่าจำนวนคำ)",
+                sp.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length < seg.Tokenize(longThai).Count(t => t.Kind != TokenKind.Whitespace), sp);
+            string clitic = "เขาวิ่งไปอย่างรวดเร็วแล้วกลับมาหาผู้อื่นเพื่อขอความช่วยเหลืออีกครั้งในที่สุด";
+            string spClitic = segSpace.InsertZwsp(clitic);
+            Check("space: ไม่เว้นก่อนคำเกาะท้าย (แล้ว ได้ ไป มา)", !spClitic.Contains(" แล้ว") && !spClitic.Contains(" ได้") && !spClitic.Contains(" ไป") && !spClitic.Contains(" มา"), spClitic);
+            Check("space: ช่องว่างเดิมของทีมแปลคงเดิม (ไม่ซ้อน ไม่หาย)",
+                segSpace.InsertZwsp("หนึ่งในสามของป่าลึกทางทิศเหนือ มีสัตว์ประหลาดดุร้ายอาศัยอยู่จำนวนมาก")
+                    .Split(' ').Any(sg => sg == "ทิศเหนือ" || sg == "เหนือ"), segSpace.InsertZwsp("หนึ่งในสามของป่าลึกทางทิศเหนือ มีสัตว์ประหลาดดุร้ายอาศัยอยู่จำนวนมาก"));
+            Check("space: ไม่แทรกรอบตัวอักษรละติน (กดปุ่มAเพื่อ คงเดิมรอบ A)",
+                segSpace.InsertZwsp("กดปุ่มAเพื่อยืนยันการทำรายการซื้อขายสินค้าทั้งหมดในร้านค้าแห่งนี้")
+                    .Replace(" ", "").Contains("ปุ่มAเพื่อ"), segSpace.InsertZwsp("กดปุ่มAเพื่อยืนยันการทำรายการซื้อขายสินค้าทั้งหมดในร้านค้าแห่งนี้"));
+            string spMask = segSpace.InsertZwsp("ระบบแจ้งเตือน{ชื่อผู้เล่น}เมื่อพลังชีวิตต่ำกว่ากึ่งหนึ่งของค่าสูงสุดลงเรื่อยๆ");
+            Check("space: ไม่แตะข้างใน placeholder", spMask.Contains("{ชื่อผู้เล่น}"), spMask);
+            var segChunkZwsp = ThaiSegmenter.FromFile(wordList, new ThaiWrapOptions { MaxChunk = 12 });
+            Check("chunk ใช้กับ ZWSP ได้: จุดตัดน้อยลงกว่าโหมดทุกรอยคำ",
+                segChunkZwsp.InsertZwsp(longThai).Count(ch => ch == zw) < seg.InsertZwsp(longThai).Count(ch => ch == zw),
+                Show(segChunkZwsp.InsertZwsp(longThai)));
+            Check("default: ไม่มี --chunk พฤติกรรมเดิมทุกรอยคำ (สูงสุด)",
+                seg.InsertZwsp(longThai).Count(ch => ch == zw) == seg.Tokenize(longThai).Count(t => t.Kind != TokenKind.Whitespace) - 1);
+
             Console.WriteLine("== formats: csv ==");
             string csv = File.ReadAllText("tests/samples/items.csv", Encoding.UTF8);
             var table0 = CsvProcessor.ParseTable(csv, ',');

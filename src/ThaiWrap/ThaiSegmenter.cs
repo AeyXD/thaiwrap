@@ -118,6 +118,7 @@ namespace ThaiWrap
         /// </summary>
         private void TokenizeThaiRun(string text, int start, int end, List<Token> tokens)
         {
+            int runStart = tokens.Count; // ขอบเขต token ของ run นี้ — ใช้ตอนรวมกลุ่มวลี (MaxChunk)
             string run = text.Substring(start, end - start);
             int n = run.Length;
 
@@ -203,6 +204,9 @@ namespace ThaiWrap
                 }
             }
             if (pendingUnknown.Length > 0) AddUnknown(tokens, pendingUnknown);
+
+            if (_options.MaxChunk > 0 && tokens.Count - runStart >= 2)
+                ThaiChunker.ChunkInPlace(tokens, runStart, tokens.Count, _options.MaxChunk);
         }
 
         /// <summary>ก้อน unknown: สั้นเก็บเป็นชิ้นเดียว ยาวเกิน threshold ยอมให้ตัดระดับ cluster กันล้นกรอบ</summary>
@@ -260,6 +264,7 @@ namespace ThaiWrap
         public string InsertZwsp(string text)
         {
             if (string.IsNullOrEmpty(text)) return text ?? "";
+            if (_options.MinThaiLength > 0 && !MeetsMinThaiLength(text, _options.MinThaiLength)) return text;
             var parts = SplitControlParts(text);
             if (parts.Count == 1 && !parts[0].Masked) return InsertZwspRaw(text);
 
@@ -361,8 +366,49 @@ namespace ThaiWrap
             return parts;
         }
 
-        private static bool ShouldInsertBetween(Token t, Token next)
+        /// <summary>
+        /// ข้อความผ่านเกณฑ์ความยาวขั้นต่ำหรือการแตะหรือไม่ — ประเมินรายบรรทัด (แยกทั้ง \n จริง
+        /// และ literal "\n" สองตัวอักษร เพราะเกมบางเอนจินเก็บบรรทัดใหม่แบบนั้น): บรรทัดใดยาวพอ
+        /// ระดับหนึ่ง = ทั้งข้อความถูกแตะ · ทุกบรรทัดสั้น = ป้าย/ปุ่มที่วางบรรทัดเดียวอยู่แล้ว ไม่แตะ
+        /// (กัน "เกม ใหม่" กลางป้าย — พฤติกรรมเดียวกับ ThaiW1Setup)
+        /// </summary>
+        private static bool MeetsMinThaiLength(string text, int min)
         {
+            int count = 0;
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+                if (c == '\n')
+                {
+                    if (count >= min) return true;
+                    count = 0;
+                }
+                else if (c == '\\' && i + 1 < text.Length && text[i + 1] == 'n')
+                {
+                    if (count >= min) return true;
+                    count = 0;
+                    i++; // ข้าม n ของ literal \n
+                }
+                else if (ThaiChars.IsThaiRange(c))
+                {
+                    count++;
+                }
+            }
+            return count >= min;
+        }
+
+        private bool ShouldInsertBetween(Token t, Token next)
+        {
+            // โหมดช่องว่างจริง: แทรกเฉพาะรอยต่อคำไทย-คำไทย เท่านั้น (ตามพฤติกรรม ThaiW1Setup) —
+            // ช่องว่างรอบ latin/เครื่องหมาย ("กดปุ่มAเพื่อ" → "กดปุ่ม A เพื่อ") เปลี่ยนหน้าตาข้อความ
+            // โดยไม่จำเป็น เพราะเอนจินก็ตัดที่ช่องว่างที่มีอยู่แล้วได้
+            if (_options.BreakChar == ' ')
+            {
+                bool thaiAfter = t.Kind == TokenKind.DictionaryWord || t.Kind == TokenKind.UnknownRun || t.Kind == TokenKind.Cluster;
+                bool thaiBefore = next.Kind == TokenKind.DictionaryWord || next.Kind == TokenKind.UnknownRun || next.Kind == TokenKind.Cluster;
+                if (!thaiAfter || !thaiBefore) return false;
+            }
+
             if (!t.IsBreakableAfter || !next.IsBreakableBefore) return false;
 
             char last = t.Text[t.Text.Length - 1];
