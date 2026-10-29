@@ -99,7 +99,7 @@ namespace ThaiWrap.BepInEx
         }
 
         /// <summary>สร้าง segmenter จาก word list + words_extra.txt ที่วางข้างกัน (มีอยู่ก็ใช้เอง)</summary>
-        private static ThaiSegmenter CreateSegmenter(string wordListPath)
+        private ThaiSegmenter CreateSegmenter(string wordListPath)
         {
             string extra = Path.Combine(Path.GetDirectoryName(wordListPath) ?? "", "words_extra.txt");
             var options = new ThaiWrapOptions
