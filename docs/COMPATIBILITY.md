@@ -1,6 +1,6 @@
 # ตาราง Compatibility — ZWSP กับ text stack ของเกม (Phase 1)
 
-หน้านี้ใช้ตอบคำถามเดียว: **เกม/เอนจินที่คุณใช้ ควรเลือกโหมดไหน** — อ่านแค่ตารางสรุปด้านล่างก็เพียงพอ ส่วนที่เหลือคือหลักฐานประกอบ (วิเคราะห์ซอร์สโค้ด / ทดสอบในเกมจริง) สำหรับคนอยากตรวจสอบเอง · เริ่มต้นเร็วๆ ดู [README](../README.md)
+หน้านี้ใช้ตอบคำถามเดียว: **เกม/เอนจินที่คุณใช้ ควรเลือกโหมดไหน** — อ่านแค่ตารางสรุปด้านล่างก็เพียงพอ ส่วนที่เหลือคือหลักฐานประกอบ (วิเคราะห์ซอร์สโค้ด / ทดสอบในเกมจริง) สำหรับคนอยากตรวจสอบเอง · เริ่มต้นเร็ว ๆ ดู [README](../README.md)
 
 วันที่: 2026-10-05 · ทดสอบ/วิเคราะห์บน: macOS (arm64), Godot 4.7.2, uGUI 2.0 source, Ren'Py (main branch)
 
@@ -33,7 +33,7 @@
 - ความเพี้ยนเฉพาะตัว: **สระ/วรรณยุกต์ท้ายบรรทัดขอบขวาโดนกลืน** — ต้องต่อ NBSP หลัง mark ท้ายข้อความ
   (`guard_trailing_mark` ใน `core/text_builder.py`)
 
-สำหรับเกม Scaleform อื่นๆ: ใช้ `thaiwrap --break-char hairspace` กับไฟล์แปล + วิธี patch ฟอนต์ตามแนวทางเดียวกัน
+สำหรับเกม Scaleform อื่น ๆ: ใช้ `thaiwrap --break-char hairspace` กับไฟล์แปล + วิธี patch ฟอนต์ตามแนวทางเดียวกัน
 
 ### เอนจินที่ตัดเฉพาะ ASCII space (Aurora / Witcher 1) — ต้องใช้ช่องว่างจริง
 
@@ -141,7 +141,7 @@ python3 tools/font_zwsp_patch.py โฟลเดอร์ฟอนต์ทั�
 
 ## วิธีทดสอบซ้ำ
 
-- Godot: สคริปต์อยู่ที่ `tools/godot-compat/` (สร้าง project.godot ว่างๆ + `godot --headless --path <dir> --script thai_test2.gd`)
+- Godot: สคริปต์อยู่ที่ `tools/godot-compat/` (สร้าง project.godot ว่าง ๆ + `godot --headless --path <dir> --script thai_test2.gd`)
 - Canvas/font probe: `cd web && python3 -m http.server 8741` → เปิด `http://127.0.0.1:8741/font_probe.html`
 - Source analysis: uGUI `TextMeshPro.cs`, renpy `textsupport.pyx` (clone --depth 1 ทั้งสอง repo)
 
@@ -149,5 +149,5 @@ python3 tools/font_zwsp_patch.py โฟลเดอร์ฟอนต์ทั�
 
 1. **Unity UGUI Legacy Text** + ยืนยัน TMP ใน Unity เวอร์ชันเก่ากว่า (TMP 1.x/2.x ยุค 2019–2021) — ต้องมี Unity editor จริง
 2. **Unreal Engine** Slate/UMG — ต้องมีโปรเจกต์ UE จริง
-3. **RPG Maker MZ** บน Windows + ฟอนต์สะกด tofu จริงในเอนจิน bitmap อื่นๆ
+3. **RPG Maker MZ** บน Windows + ฟอนต์สะกด tofu จริงในเอนจิน bitmap อื่น ๆ
 4. Godot บน text_server_fallback (ตัว server อีกตัวของ Godot) และเวอร์ชันก่อน 4.0

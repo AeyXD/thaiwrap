@@ -25,7 +25,7 @@
 | **source-link** core เข้า DLL เดียว | net35 อ้าง netstandard2.0 ไม่ได้ — รวมซอร์สแทน; core เขียนด้วย API ที่มีใน net35 ทั้งหมด (แก้จุดเดียว: `string.Concat(IEnumerable)` → `.ToArray()`) |
 | ค้นหา text component **ด้วยชื่อตอนรัน** (`AccessTools.TypeByName`) | ไม่ผูกกับ TMP/UGUI ตอน compile — DLL เดียวใช้ได้ทุกเกมไม่สน Unity เวอร์ชัน; เกมไม่มี TMP ก็ไม่พัง |
 | hook `set_text` ผ่าน **Harmony prefix แก้ `ref __0`** | แก้ค่าก่อนเข้า setter จริง ไม่เกิด recursion |
-| **cache 4096 รายการ** + fast-reject (ไม่มีไทย = return เลย) | เกม set ข้อความเดิมซ้ำๆ ทุกเฟรม → cache hit; string ละติน/ตัวเลขไม่เสียค่า segmentation เลย |
+| **cache 4096 รายการ** + fast-reject (ไม่มีไทย = return เลย) | เกม set ข้อความเดิมซ้ำ ๆ ทุกเฟรม → cache hit; string ละติน/ตัวเลขไม่เสียค่า segmentation เลย |
 | word list โหลดจากไฟล์ข้าง DLL | แก้พจนานุกรมได้โดยไม่ต้อง compile ใหม่ + ทีมแปลเพิ่มศัพท์เกมได้เอง |
 | config ผ่าน BepInEx Config | Enabled / MaxWordLength / UnknownBreakThreshold — ปรับได้ระหว่างเล่น |
 
@@ -43,7 +43,7 @@ Hook targets: `TMPro.TMP_Text`, `TMPro.TextMeshProUGUI`, `TMPro.TextMeshPro`, `U
 1. **ทดสอบในเกมจริง** — ต้องมีเกม Unity + BepInEx 5 ติดตั้งจริง (โค้ดพร้อม แพ็กผ่าน `tools/package-plugin.sh`)
 2. **IL2CPP ยังไม่รองรับ** — ต้องใช้แนวทาง BepInEx 6/Interop ต่างกันเยอะ (ทำเฟสหน้าถ้ามีดีมานด์)
 3. **TMP_InputField**: การพิมพ์ไทยในช่องกรอกข้อความอาจเจอตำแหน่ง caret เพี้ยน (display ถูก transform แต่ค่าภายในไม่ได้แปลง) — ถ้าเจอให้ปิด Enabled ชั่วคราว แล้วรายงาน issue
-4. เกมที่ set ข้อความผ่าน `SetText(char[])` หรือ mesh ตรงๆ ยังไม่ถูกดัก (เพิ่มได้ถ้าเจอจริง)
+4. เกมที่ set ข้อความผ่าน `SetText(char[])` หรือ mesh ตรง ๆ ยังไม่ถูกดัก (เพิ่มได้ถ้าเจอจริง)
 
 ## ติดตั้ง (สรุป)
 

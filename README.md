@@ -42,7 +42,7 @@ thaiwrap แก้ที่ตัวข้อความ: ตัดคำด้
   `<color=red>…</color>`, `<link="…">` ไม่ถูกแทรกจุดตัดเด็ดขาด แม้ข้างในมีตัวอักษรไทย —
   ไม่งั้นการแทนค่าตอนรันของเกมจะพัง
 - รันซ้ำกับไฟล์ที่แปลงแล้ว ไม่เพิ่มจุดตัดซ้ำ (idempotent — ยกเว้นโหมด space ด้านล่าง)
-- การเข้ารหัสไฟล์ผิดจะถูก **ปฏิเสธ** (เช่น CP874 ไม่มี BOM) ไม่ใช่แปลงเงียบๆ จนตัวอักษรเสีย
+- การเข้ารหัสไฟล์ผิดจะถูก **ปฏิเสธ** (เช่น CP874 ไม่มี BOM) ไม่ใช่แปลงเงียบ ๆ จนตัวอักษรเสีย
 
 **รองรับไฟล์งานแปล 5 แบบ** — ดูรายละเอียดและวิธีเลือกไฟล์/คอลัมน์ที่หัวข้อ "ไฟล์งานแปลที่รองรับ"
 
@@ -117,7 +117,7 @@ dotnet run --project src/ThaiWrap.Cli -- data/ -r                 # ทั้ง
 dotnet run --project src/ThaiWrap.Cli -- th.txt -f keyvalue -o th.out.txt
 ```
 
-(ถ้าใช้ binary จาก `publish/` แทน `dotnet run ... --` ด้วยชื่อไฟล์โปรแกรมตรงๆ เช่น
+(ถ้าใช้ binary จาก `publish/` แทน `dotnet run ... --` ด้วยชื่อไฟล์โปรแกรมตรง ๆ เช่น
 `./ThaiWrap.Cli tests/samples/items.csv --columns thai --dry-run`)
 
 Options หลัก: `-f auto|text|csv|tsv|json|po|keyvalue` · `--columns "1,3" หรือ "ชื่อ"` · `--json-keys "desc,tooltip"` · `--break-char zwsp|hairspace|space` · `--chunk <n>` · `--min-len <n>` · `--normalize` · `--dry-run` (diff, ZWSP แสดงเป็น ·) · `--mispaste` (ตรวจวางผิดแถว) · `--check` (lint สำหรับ CI) · `-r` · `--inplace` (+.bak) · `--maxword` (0=ไม่จำกัด) · `--unknown-threshold` · `--stats`
@@ -145,7 +145,7 @@ Options หลัก: `-f auto|text|csv|tsv|json|po|keyvalue` · `--columns "1,3
 - ข้างไฟล์ `words_th.txt` (รวมโฟลเดอร์ `BepInEx/plugins/ThaiWrap/` ของปลั๊กอิน)
 - ข้างตัวโปรแกรม (binary ที่แจก)
 
-ไม่ต้องใส่ option ใดๆ — มีไฟล์เมื่อไหร่ใช้เลย และจะขึ้นรายงานให้เห็นว่าโหลดอะไรไป (+เพิ่ม −ลบ กี่คำ)
+ไม่ต้องใส่ option ใด ๆ — มีไฟล์เมื่อไหร่ใช้เลย และจะขึ้นรายงานให้เห็นว่าโหลดอะไรไป (+เพิ่ม −ลบ กี่คำ)
 
 ```text
 # คำอธิบายขึ้นต้น # ก็ข้าม
@@ -198,7 +198,7 @@ Options หลัก: `-f auto|text|csv|tsv|json|po|keyvalue` · `--columns "1,3
 - โหมด space ใช้ DP ชั้นที่สอง (กลุ่มวลี) พอร์ตจาก [ThaiW1Setup](https://github.com/AeyXD/ThaiW1Setup) (MIT)
 - โครงสร้างโค้ด: `src/ThaiWrap` (core, ตัดคำ+กฎผูกคำ+normalize) · `src/ThaiWrap.Formats`
   (อ่าน/เขียน 5 ฟอร์แมตแบบอนุรักษ์เดิม) · `src/ThaiWrap.Cli` · `src/ThaiWrap.BepInEx` —
-  core และ plugin เขียนด้วย API เก่าๆ ที่มีในทุก.NET ไม่มี dependency ภายนอกทั้งโปรเจกต์
+  core และ plugin เขียนด้วย API เก่า ๆ ที่มีในทุก.NET ไม่มี dependency ภายนอกทั้งโปรเจกต์
 - เทส 118 ข้อ (invariant + ประโยคเกมจริง + ทุกฟอร์แมต + ความปลอดภัยไฟล์ + normalize + กลุ่มวลี) ·
   CI รันบน ubuntu + windows จริง รวมทดสอบ binary ที่แพ็กแล้ว
 

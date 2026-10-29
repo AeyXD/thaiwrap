@@ -20,7 +20,7 @@
 
 ### 2. ความปลอดภัยของ pipeline
 
-- **`--dry-run`** — แสดง diff รายบรรทัด (ZWSP แสดงเป็น `·`) โดยไม่เขียนไฟล์ใดๆ
+- **`--dry-run`** — แสดง diff รายบรรทัด (ZWSP แสดงเป็น `·`) โดยไม่เขียนไฟล์ใด ๆ
 - **เลือกคอลัมน์/ฟิลด์** — กัน ZWSP ปนเข้าไปใน string ID (เช่น `item_sword_desc` ไม่มีวันถูกแตะ)
 - **BOM ถูกรักษา** — อ่านแล้วเขียนกลับด้วย encoding/BOM เดิม (UTF-8 BOM, UTF-16 LE/BE)
 - **Line ending ถูกรักษา** — CRLF ของ csv, terminator รายบรรทัดของ po/keyvalue
