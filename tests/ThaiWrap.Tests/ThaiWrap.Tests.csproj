@@ -16,4 +16,10 @@
     <Compile Include="../../src/ThaiWrap.BepInEx/ThaiTextFilter.cs" Link="BepInEx/ThaiTextFilter.cs" />
   </ItemGroup>
 
+  <!-- เทสเป็น console runner ไม่ใช่ xunit — `dotnet test` จะจบ exit 0 โดยไม่รันอะไรเลย
+       จึงบังคับให้ fail พร้อมบอกคำสั่งที่ถูกแทนการผ่านเงียบ -->
+  <Target Name="RejectDotnetTest" BeforeTargets="VSTest">
+    <Error Text="โปรเจกต์นี้เป็น console runner — dotnet test ไม่รันเทส ให้ใช้: dotnet run --project tests/ThaiWrap.Tests -- data/words_th.txt" />
+  </Target>
+
 </Project>
