@@ -13,3 +13,6 @@ obj/
 # reference DLLs ที่โหลดผ่าน tools/fetch-bepinex.sh
 lib/
 dist/
+
+# HANDOVER อยู่ใน repo รวม (symlink — git มองเป็นไฟล์ ต้องเขียนไม่มี / ท้าย)
+.handover

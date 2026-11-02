@@ -4,7 +4,10 @@
 เพื่อให้เอนจินเกมที่ตัดบรรทัดที่ช่องว่างตัดภาษาไทยถูกจุด — โดยไม่ต้องแก้เกม
 
 - ตอบ/เขียนเอกสารเป็นภาษาไทย · สถานะงานล่าสุดอยู่ที่ `.handover/HANDOVER.md`
-  (git-excluded — ถ้าไม่มีไฟล์นั้นแปลว่า clone ใหม่ ให้อ่าน `README.md` + `docs/` ก่อน)
+  — **HANDOVER อยู่ใน repo private รวม `AeyXD/handover-notes`** (`.handover` เป็น symlink →
+  `../handover-notes/thaiwrap` ไม่อยู่ใน git ของ repo นี้) · อัปเดต/commit/push HANDOVER **ที่ repo รวม**
+  ตามโครงใน `../handover-notes/GUIDE.md` · เริ่ม-จบ session ให้ pull/push ทั้งสอง repo
+  · ถ้าไม่มี symlink = เครื่องใหม่ ดูวิธีตั้งใน README ของ repo รวม
 - หลักการใหญ่ของโปรเจกต์: **อนุรักษ์ข้อมูลเดิมเสมอ** — parser และ output ต้อง
   preserve ส่วนที่ไม่แตะ (BOM/CRLF/คอลัมน์อื่น/key ของ JSON) · ผู้ใช้ดูผลด้วย
   `--dry-run` ก่อนเขียนทับจริงทุกครั้ง
@@ -81,5 +84,6 @@ dotnet run --project src/ThaiWrap.Cli -- tests/samples/items.csv --columns thai 
 - ข้อความอินพุตเป็นของผู้ใช้: default ต้องปลอดภัยที่สุด (ไม่เขียนทับโดยไม่ระบุ -o,
   `--inplace` สร้าง .bak เสมอ)
 - จบ session ทำงาน → อัปเดต `.handover/HANDOVER.md` (สรุปสิ่งที่ทำ/ค้าง พร้อม commit hash
-  และแก้วันที่ "อัปเดต" หัวไฟล์ให้ตรง)
+  และแก้วันที่ "อัปเดต" หัวไฟล์ให้ตรง) — เขียนผ่าน symlink แล้ว commit+push ที่ repo รวม
+  ตามเช็กลิสต์ท้าย GUIDE
 - ตัวเลขในเอกสาร (จำนวนคำ/จำนวนเทส) ให้ระบุว่าวัด ณ เวอร์ชันไหน — ค่าจริงดูจากคำสั่ง ไม่ใช่จากเอกสาร
