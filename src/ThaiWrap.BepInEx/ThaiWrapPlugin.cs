@@ -14,7 +14,7 @@ namespace ThaiWrap.BepInEx
     {
         public const string PluginGuid = "thaiwrap.plugin";
         public const string PluginName = "ThaiWrap";
-        public const string PluginVersion = "0.8.0";
+        public const string PluginVersion = "0.9.0";
 
         internal static ThaiTextFilter? Filter;
         internal static ManualLogSource? Log;
@@ -108,6 +108,12 @@ namespace ThaiWrap.BepInEx
                 MaxWordLength = _maxWordLength?.Value ?? 0,
                 UnknownBreakThreshold = _unknownBreakThreshold?.Value ?? 8
             };
+            string noBreak = Path.Combine(Path.GetDirectoryName(wordListPath) ?? "", "nobreak.txt");
+            if (File.Exists(noBreak))
+            {
+                options.NoBreakPhrases = ThaiSegmenter.LoadNoBreakPhrases(noBreak);
+                Log?.LogInfo("วลีห้ามตัด: " + noBreak + " (" + options.NoBreakPhrases.Count + " วลี)");
+            }
             if (File.Exists(extra))
             {
                 Log?.LogInfo("คำเฉพาะโปรเจกต์: " + extra);

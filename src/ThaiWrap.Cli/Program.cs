@@ -92,6 +92,13 @@ namespace ThaiWrap.Cli
             }
             // words_extra.txt ของโปรเจกต์ (วางเอง — ดู FindWordsExtra) มีอยู่ก็ใช้เองอัตโนมัติ
             string? extraPath = FindWordsExtra(cfg.WordList);
+            string? noBreakPath = FindDataFile("nobreak.txt", cfg.WordList);
+            if (noBreakPath != null)
+            {
+                cfg.Options.NoBreakPhrases = ThaiSegmenter.LoadNoBreakPhrases(noBreakPath);
+                Console.Error.WriteLine("วลีห้ามตัด: " + noBreakPath + " (" + cfg.Options.NoBreakPhrases.Count +
+                    " วลี — ช่องว่างกลางวลีจะกลายเป็น NBSP ไม่เป็นจุดตัด)");
+            }
             ThaiSegmenter segmenter;
             if (extraPath != null)
             {
@@ -442,25 +449,28 @@ namespace ThaiWrap.Cli
         }
 
         /// <summary>
-        /// หาไฟล์คำเฉพาะโปรเจกต์ที่ผู้ใช้วางเอง (ไม่ต้องใส่ option) — ลำดับ: data/ และรากของ
+        /// หาไฟล์ข้อมูลโปรเจกต์ที่ผู้ใช้วางเอง (ไม่ต้องใส่ option) — ลำดับ: data/ และรากของ
         /// working directory → ข้าง word list หลัก (ครอบคลุม layout ของ binary ที่แจก) → ข้าง executable
+        /// (ใช้ร่วมของ words_extra.txt และ nobreak.txt)
         /// </summary>
-        private static string? FindWordsExtra(string mainList)
+        private static string? FindDataFile(string name, string mainList)
         {
             string exeDir = AppContext.BaseDirectory;
             string mainDir = Path.GetDirectoryName(Path.GetFullPath(mainList)) ?? "";
             string[] candidates =
             {
-                Path.Combine("data", "words_extra.txt"),
-                "words_extra.txt",
-                Path.Combine(mainDir, "words_extra.txt"),
-                Path.Combine(exeDir, "data", "words_extra.txt"),
-                Path.Combine(exeDir, "words_extra.txt"),
+                Path.Combine("data", name),
+                name,
+                Path.Combine(mainDir, name),
+                Path.Combine(exeDir, "data", name),
+                Path.Combine(exeDir, name),
             };
             foreach (string c in candidates)
                 if (File.Exists(c)) return c;
             return null;
         }
+
+        private static string? FindWordsExtra(string mainList) => FindDataFile("words_extra.txt", mainList);
 
         /// <summary>นับความถี่คำนอกพจนานุกรม — รวมก้อน UnknownRun/Cluster ที่ติดกันกลับเป็นคำเดียวก่อนนับ</summary>
         private static void CollectUnknowns(ThaiSegmenter segmenter, string input, Dictionary<string, int> into)

@@ -69,6 +69,22 @@ namespace ThaiWrap
         }
 
         /// <summary>
+        /// อ่านไฟล์วลีห้ามตัดกลางวลี (เช่น nobreak.txt): บรรทัดละวลี · ขึ้นต้น '#' หรือว่าง = ข้าม ·
+        /// เรียงยาว→สั้นให้อัตโนมัติ (วลีที่ซ้อนกัน เช่น "ลา วาเล็ตต์" ใน "อาร์ยัน ลา วาเล็ตต์" จะจับตัวยาวก่อน)
+        /// </summary>
+        public static List<string> LoadNoBreakPhrases(string path)
+        {
+            var phrases = new List<string>();
+            foreach (var line in File.ReadAllLines(path))
+            {
+                string t = line.Trim();
+                if (t.Length > 0 && t[0] != '#') phrases.Add(t);
+            }
+            phrases.Sort((a, b) => b.Length.CompareTo(a.Length));
+            return phrases;
+        }
+
+        /// <summary>
         /// word list หลัก + ไฟล์คำเฉพาะโปรเจกต์ (เช่น words_extra.txt ที่ผู้ใช้วางเอง)
         /// รูปแบบบรรทัด: "-คำ" = ลบคำนั้นออกจากพจนานุกรม (แก้คำที่แย่งพยางค์คำถัดไป เช่น
         /// ใช้การ ทำให้ตัดเป็น "ใช้การ|เล่น" แทน "ใช้|การเล่น") · ขึ้นต้น '#' หรือว่าง = ข้าม ·
@@ -346,21 +362,72 @@ namespace ThaiWrap
             if (string.IsNullOrEmpty(text)) return text ?? "";
             if (_options.MinThaiLength > 0 && !MeetsMinThaiLength(text, _options.MinThaiLength)) return text;
             var parts = SplitControlParts(text);
-            if (parts.Count == 1 && !parts[0].Masked) return InsertZwspRaw(text);
+            if (parts.Count == 1 && !parts[0].Masked) return ProcessNormal(text, InsertZwspRaw);
 
             // ชิ้นที่ไม่ใช่ mask ถูกตัดคำแบบอิสระ — InsertZwspRaw แทรกเฉพาะระหว่าง token
             // จึงไม่มี ZWSP ใหม่หลุดไปติดขอบ mask และ ZWSP เดิมของผู้ใช้ถูกรักษาไว้ทั้งหมด
             var sb = new StringBuilder(text.Length + 16);
             foreach (var part in parts)
             {
-                sb.Append(part.Masked ? part.Text : InsertZwspRaw(part.Text));
+                sb.Append(part.Masked ? part.Text : ProcessNormal(part.Text, InsertZwspRaw));
             }
             return sb.ToString();
         }
 
-        private string InsertZwspRaw(string text)
+        /// <summary>
+        /// ประมวลผลชิ้นข้อความปกติ (ไม่ใช่ mask): normalize ก่อน แล้วจึงแยกวลีห้ามตัด —
+        /// จับคู่วลีกับข้อความ "หลัง normalize" จึงต้องเขียนวลีในไฟล์ด้วยสะกดที่ถูก
+        /// </summary>
+        private string ProcessNormal(string text, Func<string, string> raw)
         {
             if (_options.Normalize) text = ThaiNormalizer.Normalize(text);
+            return WrapNoBreak(text, raw);
+        }
+
+        /// <summary>
+        /// วลีห้ามตัดกลางวลี (NoBreakPhrases): แยกข้อความเป็นช่วงวลี/ช่วงปกติ — ช่วงวลีส่งออก
+        /// ตรงๆ โดยแทนช่องว่างด้วย NBSP (U+00A0: กว้างเท่าชองว่าง แต่ไม่เป็นจุดตัด) จึงไม่มีจุดตัด
+        /// ใดๆ ภายในวลี (แม้คำในวลีเป็น unknown ก็ไม่ถูกแยก) · จับคู่ทั้งรูป space (ครั้งแรก) และรูป NBSP
+        /// (รันซ้ำ) จึง idempotent · เทียบตำแหน่งเริ่มตำแหน่งเดียว วลียาวก่อน → วลีซ้อนจับตัวยาว
+        /// วิธีนี้คือฉบับ ThaiW2Setup (NBSP + เติม glyph ที่ฟอนต์ถ้าไม่มี) — สำหรับเอนจินที่ตัดเฉพาะ
+        /// U+0020 และใช้ฟอนต์ U+0020 กว้าง 0 ให้ใช้เทคนิค wide glyph ของ ThaiW1Setup แทน (ดู COMPATIBILITY.md)
+        /// </summary>
+        private string WrapNoBreak(string text, Func<string, string> raw)
+        {
+            var phrases = _options.NoBreakPhrases;
+            if (phrases == null || phrases.Count == 0) return raw(text);
+
+            var sb = new StringBuilder();
+            var norm = new StringBuilder();
+            int i = 0, n = text.Length;
+            while (i < n)
+            {
+                string? hit = null;
+                bool nbspForm = false;
+                foreach (var ph in phrases)
+                {
+                    if (StartsAt(text, i, ph)) { hit = ph; break; }
+                    string nbv = ph.Replace(' ', '\u00A0');
+                    if (nbv != ph && StartsAt(text, i, nbv)) { hit = nbv; nbspForm = true; break; }
+                }
+                if (hit == null) { norm.Append(text[i]); i++; continue; }
+                if (norm.Length > 0) { sb.Append(raw(norm.ToString())); norm.Length = 0; }
+                sb.Append(nbspForm ? hit : hit.Replace(' ', '\u00A0'));
+                i += hit.Length;
+            }
+            if (norm.Length > 0) sb.Append(raw(norm.ToString()));
+            return sb.ToString();
+        }
+
+        /// <summary>text เริ่มด้วย phrase ที่ตำแหน่ง i หรือไม่ (net35/netstandard2.0 ไม่มี overload พร้อม startIndex)</summary>
+        private static bool StartsAt(string text, int i, string phrase)
+        {
+            return text.Length - i >= phrase.Length &&
+                   text.IndexOf(phrase, i, StringComparison.Ordinal) == i;
+        }
+
+        private string InsertZwspRaw(string text)
+        {
             var tokens = Tokenize(text);
             var sb = new StringBuilder(text.Length + tokens.Count);
             for (int k = 0; k < tokens.Count; k++)
@@ -379,19 +446,18 @@ namespace ThaiWrap
         {
             if (string.IsNullOrEmpty(text)) return text ?? "";
             var parts = SplitControlParts(text);
-            if (parts.Count == 1 && !parts[0].Masked) return SegmentToStringRaw(text, separator);
+            if (parts.Count == 1 && !parts[0].Masked) return ProcessNormal(text, t => SegmentToStringRaw(t, separator));
 
             var sb = new StringBuilder();
             foreach (var part in parts)
             {
-                sb.Append(part.Masked ? part.Text : SegmentToStringRaw(part.Text, separator));
+                sb.Append(part.Masked ? part.Text : ProcessNormal(part.Text, t => SegmentToStringRaw(t, separator)));
             }
             return sb.ToString();
         }
 
         private string SegmentToStringRaw(string text, string separator)
         {
-            if (_options.Normalize) text = ThaiNormalizer.Normalize(text);
             var tokens = Tokenize(text);
             var sb = new StringBuilder();
             for (int k = 0; k < tokens.Count; k++)

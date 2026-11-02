@@ -317,6 +317,44 @@ namespace ThaiWrap.Tests
                 Check("mispaste: ตารางสะอาดไม่มีรายงาน", clean.Count == 0);
             }
 
+            Console.WriteLine("== nobreak.txt วลีห้ามตัดกลางวลี (NBSP — วิธีของ ThaiW2Setup) ==");
+            string nbTmp = Path.GetTempFileName();
+            try
+            {
+                File.WriteAllLines(nbTmp, new[] { "# คอมเมนต์", "เดอะ วิทเชอร์", "", "ลา วาเล็ตต์", "อาร์ยัน ลา วาเล็ตต์" }, Encoding.UTF8);
+                var phrases = ThaiSegmenter.LoadNoBreakPhrases(nbTmp);
+                Check("nobreak: โหลดข้าม # /บรรทัดว่าง + เรียงยาวก่อน (วลีซ้อนจับยาวก่อน)",
+                    phrases.Count == 3 && phrases[0] == "อาร์ยัน ลา วาเล็ตต์", string.Join("|", phrases));
+                var nb = '\u00A0';
+                var segNb = ThaiSegmenter.FromFile(wordList, new ThaiWrapOptions { NoBreakPhrases = phrases });
+                string t = segNb.InsertZwsp("ตัวละครในเดอะ วิทเชอร์ต้องเดินทางไกลข้ามแผ่นดินที่สงบสุขเสมอ");
+                Check("nobreak: ช่องว่างกลางวลีกลายเป็น NBSP และไม่มีจุดตัดคั่นกลางวลี",
+                    t.Contains("เดอะ" + nb + "วิทเชอร์") && !t.Contains(zw.ToString() + nb) && !t.Contains(nb.ToString() + zw), Show(t));
+                Check("nobreak: รอบนอกวลียังแทรกจุดตัดปกติ และช่องว่างอื่นคือเดิม (ยังเป็น space)",
+                    t.Contains(zw) && !t.Contains(' '), Show(t));
+                Check("nobreak: วลีซ้อน — จับวลียาวก่อน (อาร์ยัน ลา วาเล็ตต์ = NBSP สองตัว)",
+                    segNb.InsertZwsp("ขุนนางอาร์ยัน ลา วาเล็ตต์ปกครองเมืองเล็กๆ อย่างสงบเรียบร้อยมานานหลายปี")
+                        .Contains("อาร์ยัน" + nb + "ลา" + nb + "วาเล็ตต์"));
+                string twice2 = segNb.InsertZwsp(segNb.InsertZwsp("เดินทางไปพบเดอะ วิทเชอร์ที่หมู่บ้านชายขอบป่าลึกในค่ำคืนนั้น"));
+                Check("nobreak: idempotent (รันซ้ำผลเดิม)", twice2 == segNb.InsertZwsp("เดินทางไปพบเดอะ วิทเชอร์ที่หมู่บ้านชายขอบป่าลึกในค่ำคืนนั้น"));
+                string maskNb = segNb.InsertZwsp("รายงาน{เดอะ วิทเชอร์}ถึงผู้การเมืองทันทีเมื่อพบเห็นสัตว์ประหลาดบินได้");
+                Check("nobreak: ไม่แตะข้างใน mask", maskNb.Contains("{เดอะ วิทเชอร์}"), Show(maskNb));
+                var segNbNorm = ThaiSegmenter.FromFile(wordList,
+                    new ThaiWrapOptions { NoBreakPhrases = phrases, Normalize = true });
+                string dirtyNb = segNbNorm.InsertZwsp("เขาอ่านเเรื่องเดอะ วิทเชอร์จนเกือบเที่ยงคืนแล้วยังไม่หลับสักทีเลย");
+                Check("nobreak: ทำงานหลัง normalize (เเ→แ แล้วจับวลีที่สะกดถูกได้)",
+                    dirtyNb.Contains("อ่าน" + zw) && dirtyNb.Contains("เดอะ" + nb + "วิทเชอร์")
+                    && !dirtyNb.Contains("เชอ" + zw), Show(dirtyNb));
+                var segNbSpace = ThaiSegmenter.FromFile(wordList,
+                    new ThaiWrapOptions { NoBreakPhrases = phrases, BreakChar = ' ', MaxChunk = 12, MinThaiLength = 40 });
+                string sp2 = segNbSpace.InsertZwsp("ชาวบ้านเล่าว่าเดอะ วิทเชอร์เคยผ่านหมู่บ้านนี้มาก่อนเมื่อหลายสิบปีที่ผ่านมาแล้ว");
+                Check("nobreak: โหมด space — ไม่แทรกช่องว่างจุดตัดกลางวลี (มีแต่ NBSP)",
+                    sp2.Contains("เดอะ" + nb + "วิทเชอร์") && sp2.Contains(" "), sp2);
+                Check("nobreak: ไม่มีไฟล์วลี = พฤติกรรมเดิมทุกอย่าง (ไม่มี NBSP โผล่)",
+                    !seg.InsertZwsp("ตัวละครในเดอะ วิทเชอร์ต้องเดินทางไกลข้ามแผ่นดินที่สงบสุขเสมอ").Contains('\u00A0'));
+            }
+            finally { File.Delete(nbTmp); }
+
             Console.WriteLine("== ร↔ล suggester (ข้อเสนอการสะกด — พอร์ตจาก find_ral_swaps ของ W3) ==");
             Check("ral: IsKnownWord ถูก (มี/ไม่มีใน dict)", seg.IsKnownWord("กระบี่") && !seg.IsKnownWord("บุกลุก"));
             Check("ral: บุกลุก → บุกรุก (เคสจริงจาก W3 — ทุกพยางค์เป็นคำจริงจึงรอดตัวตรวจคำสะกด)",

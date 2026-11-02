@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace ThaiWrap
 {
     public sealed class ThaiWrapOptions
@@ -47,6 +49,16 @@ namespace ThaiWrap
         /// (0 = แตะทุกรายการ) · ค่าที่ใช้จริงกับโหมด space: 40
         /// </summary>
         public int MinThaiLength { get; set; }
+
+        /// <summary>
+        /// วลีที่มีช่องว่างแต่ห้ามตัดบรรทัดกลางวลี (เช่น "เดอะ วิทเชอร์") — ช่องว่างกลางวลีจะถูก
+        /// แทนด้วย NBSP (U+00A0) ตอนแปลง: กว้างเท่าช่องว่างปกติแต่ไม่เป็นจุดตัดของเอนจินที่รองรับ
+        /// (วิธีของ ThaiW2Setup — เหมาะกับเอนจินที่ตัดที่ space-class · ฟอนต์ต้องมี glyph ที่ U+00A0)
+        /// · สำหรับเอนจินที่ตัดเฉพาะ U+0020 และใช้ฟอนต์ U+0020 กว้าง 0 (แบบ ThaiW1Setup)
+        /// ให้ใช้เทคนิค wide glyph แทน — ดู docs/COMPATIBILITY.md · โหลดจากไฟล์ด้วย
+        /// <see cref="ThaiSegmenter.LoadNoBreakPhrases"/> · null/ว่าง = ปิด
+        /// </summary>
+        public IList<string>? NoBreakPhrases { get; set; }
 
         /// <summary>
         /// ยุบรูปพิมพ์ผิดก่อนตัดคำ (เเ→แ, มาร์คซ้อนยุบเหลือตัวเดียว) — default false
