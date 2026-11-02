@@ -1,7 +1,9 @@
 # AGENTS.md — คำแนะนำสำหรับ AI agent ที่ทำงานใน thaiwrap
 
-ตัดคำไทยด้วยพจนานุกรม แล้วแทรก ZWSP (U+200B) หรือ hairspace (U+200A) ที่รอยต่อคำ
-เพื่อให้เอนจินเกมที่ตัดบรรทัดที่ช่องว่างตัดภาษาไทยถูกจุด — โดยไม่ต้องแก้เกม
+ตัดคำไทยด้วยพจนานุกรม แล้วแทรกจุดตัดบรรทัดที่รอยต่อคำ ให้เอนจินเกมตัดภาษาไทยถูกจุด
+โดยไม่ต้องแก้เกม — เลือกตัวคั่นตามเอนจิน (ดูตารางเต็มใน `docs/COMPATIBILITY.md`):
+ZWSP ปกติ · hairspace สำหรับ Scaleform (W3) · ช่องว่างจริงแบบกลุ่มวลีสำหรับ Aurora (W1)
+· วลีห้ามตัดกลางวลีใช้ NBSP (`nobreak.txt`)
 
 - ตอบ/เขียนเอกสารเป็นภาษาไทย · สถานะงานล่าสุดอยู่ที่ `.handover/HANDOVER.md`
   — **HANDOVER อยู่ใน repo private รวม `AeyXD/handover-notes`** (`.handover` เป็น symlink →
@@ -20,6 +22,11 @@ export PATH="$HOME/.dotnet:$PATH" DOTNET_ROOT="$HOME/.dotnet"
 dotnet run --project tests/ThaiWrap.Tests -- data/words_th.txt  # เทส — ต้องจบด้วย "ALL n CHECKS PASSED"
 dotnet run --project src/ThaiWrap.Cli -- samples/game_sentences.txt -m sep
 dotnet run --project src/ThaiWrap.Cli -- tests/samples/items.csv --columns thai --dry-run
+dotnet run --project src/ThaiWrap.Cli -- tests/samples/items.csv --mispaste   # ตรวจวางผิดแถว (csv/tsv)
+dotnet run --project src/ThaiWrap.Cli -- data/ -r --check ; echo $?           # lint: exit 1 ถ้าไทยยังไม่แตรป
+
+./tools/fetch-bepinex.sh                       # ครั้งแรก — ดาวน์โหลด BepInEx refs (lib/ ไม่ commit)
+dotnet build src/ThaiWrap.BepInEx -c Release   # plugin — ต้อง 0 warning 0 error
 ```
 
 - **อย่าใช้ `dotnet test`** — โปรเจกต์เทสเป็น console runner (ไม่ใช่ xunit) เดิมคำสั่งนี้
@@ -27,24 +34,26 @@ dotnet run --project src/ThaiWrap.Cli -- tests/samples/items.csv --columns thai 
   ใช้คำสั่งเดียวกับ CI ด้านบน (exit != 0 เมื่อมี check ใด fail)
 
 - Target: Core = netstandard2.0, Plugin(BepInEx) = net35 — **ห้ามเพิ่ม dependency**
-  ในสองตัวนี้ · CLI/Formats ก็ไม่มี dependency เช่นกัน
+  ในสองตัวนี้ · CLI/Formats ก็ไม่มี dependency เช่นกัน · ระวัง API ที่ net35/netstandard2.0
+  ไม่มี เช่น `string.StartsWith(value, startIndex, comparison)` (net35 ไม่มี overload นี้ —
+  เคยชนแล้ว ต้องเขียน helper เอง)
 - CI รันบน ubuntu + windows จริง — อย่าใช้ API เฉพาะ macOS
 
 ## โครงสร้าง
 
 | ที่อยู่ | หน้าที่ |
 |---|---|
-| `src/ThaiWrap/ThaiSegmenter.cs` | หัวใจ: DP optimal segmentation + trie + กฎพยัญชนะทวิภาค + วลีห้ามตัด (nobreak) |
+| `src/ThaiWrap/ThaiSegmenter.cs` | หัวใจ: DP optimal segmentation + trie + กฎพยัญชนะทวิภาค + วลีห้ามตัด (nobreak) + รวม `words_extra` + เสนอ ร↔ล (`SuggestRalSwap`) |
 | `src/ThaiWrap/ThaiNormalizer.cs` | `--normalize` ยุบรูปพิมพ์ผิด (เเ→แ, มาร์คซ้อน/ลำดับผิด) |
 | `src/ThaiWrap/ThaiChunker.cs` | รวมคำเป็นกลุ่มวลีสำหรับโหมด space (พอร์ตจาก ThaiW1Setup) |
-| `src/ThaiWrap.Formats/` | parser csv/tsv/json/po/keyvalue — อนุรักษ์เดิม |
+| `src/ThaiWrap.Formats/` | parser csv/tsv/json/po/keyvalue — อนุรักษ์เดิม · `MispasteDetector` (--mispaste) |
 | `src/ThaiWrap.Cli/` | CLI + options |
 | `src/ThaiWrap.BepInEx/` | plugin hook TMP/UGUI ตอนเกมรัน (net35) · แผนทดสอบ `docs/PLUGIN-TEST-PLAN.md` |
-| `tests/ThaiWrap.Tests/` | invariant + ชุดประโยคเกม (console runner) |
+| `tests/ThaiWrap.Tests/` | invariant + ชุดประโยคเกม — 143 checks ณ v0.9.0 (console runner) |
 | `data/words_th.txt` | พจนานุกรม (65,758 คำ ณ v0.9.0) |
 | `nobreak.txt` · `words_extra.txt` | วลีห้ามตัด · คำเฉพาะเกม — ไฟล์ของผู้ใช้ วางข้าง word list (ไม่อยู่ใน repo) |
 | `web/` | หน้าทดสอบ visual — `thaiwrap.js` เป็น **JS port ของ core** ณ v0.4.0 (ยังไม่มี normalize/โหมด space/words_extra/nobreak · ไม่มีเทสใน CI) |
-| `tools/` | สคริปต์ package plugin / patch ฟอนต์ / ทดสอบ Godot |
+| `tools/` | `fetch-bepinex.sh` (refs สำหรับ build plugin) · `package-plugin.sh` (zip ปล่อยเวอร์ชัน) · patch ฟอนต์ · ทดสอบ Godot |
 | `publish/` | binary single-file ของ CLI ต่อ RID (commit ไว้ใน repo) |
 | `docs/COMPATIBILITY.md` | ความเข้ากันได้เอนจิน/ฟอนต์ (ZWSP vs hairspace · NBSP สำหรับวลีห้ามตัด) |
 
@@ -77,6 +86,9 @@ dotnet run --project src/ThaiWrap.Cli -- tests/samples/items.csv --columns thai 
    และแทนช่องว่างกลางวลีด้วย NBSP (U+00A0) · การแทนแค่ช่องว่าง→NBSP ไม่พอ เพราะคำ
    unknown ในวลียังถูกแยกได้ · ต้อง idempotent (จับทั้งรูป space/NBSP) · เอนจินที่ตัดเฉพาะ
    U+0020 + ฟอนต์สเปซกว้าง 0 ต้องใช้วิธี wide glyph แทน (ดูตารางใน `docs/COMPATIBILITY.md`)
+7. **โหมด `--break-char space` ไม่ idempotent** — ช่องว่างจริงของทีมแปลแยกจากจุดตัดที่แทรก
+   ไม่ได้ รันซ้ำบนไฟล์ที่แปลงแล้วจะเพิ่มช่องว่างซ้ำ — ต้องรันจากต้นฉบับสะอาดหรือ `--dry-run`
+   ก่อนเสมอ (W1 แก้เรื่องนี้ด้วย WIDE_SPACE PUA ที่ระดับ pipeline เฉพาะเกม)
 
 ## ธรรมเนียม
 
@@ -86,4 +98,9 @@ dotnet run --project src/ThaiWrap.Cli -- tests/samples/items.csv --columns thai 
 - จบ session ทำงาน → อัปเดต `.handover/HANDOVER.md` (สรุปสิ่งที่ทำ/ค้าง พร้อม commit hash
   และแก้วันที่ "อัปเดต" หัวไฟล์ให้ตรง) — เขียนผ่าน symlink แล้ว commit+push ที่ repo รวม
   ตามเช็กลิสต์ท้าย GUIDE
+- **ออกเวอร์ชัน `vX.Y.Z`** (แนวทางจาก v0.8.0): bump `PluginVersion` ใน `ThaiWrapPlugin.cs`
+  ให้ตรงแท็ก → เทสผ่าน → rebuild `publish/` ทั้ง 3 RID → commit "vX.Y.Z: …" → แท็ก +
+  GitHub Release ภาษาไทย พร้อม zip CLI 3 แพลตฟอร์ม + `ThaiWrap-BepInEx.zip`
+  (สร้างด้วย `./tools/package-plugin.sh`) → release notes ต้องระบุสถานะ plugin ตรงๆ
+  (ตอนนี้คือ "ยังไม่ได้ทดสอบในเกมจริง" จนกว่าแผน `docs/PLUGIN-TEST-PLAN.md` จะผ่าน)
 - ตัวเลขในเอกสาร (จำนวนคำ/จำนวนเทส) ให้ระบุว่าวัด ณ เวอร์ชันไหน — ค่าจริงดูจากคำสั่ง ไม่ใช่จากเอกสาร
