@@ -16,3 +16,19 @@ dist/
 
 # HANDOVER อยู่ใน repo รวม (symlink — git มองเป็นไฟล์ ต้องเขียนไม่มี / ท้าย)
 .handover
+
+# ขยะ OS / เครื่องมือ — กันไว้ก่อนโผล่เป็น untracked แล้วหลุด git add .
+._*
+Thumbs.db
+Desktop.ini
+*.orig
+*.rej
+*.tmp
+*~
+.idea/
+.vscode/
+.vs/
+TestResults/
+*.binlog
+__pycache__/
+*.pyc
