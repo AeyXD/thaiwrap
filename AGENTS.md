@@ -81,7 +81,8 @@ dotnet build src/ThaiWrap.BepInEx -c Release   # plugin — ต้อง 0 warni
    (`linux-x64` `osx-arm64` `win-x64`) ด้วย `dotnet publish src/ThaiWrap.Cli -c Release -r <RID>`
    (csproj ตั้ง single-file และคัด `data/words_th.txt` ไปที่ `data/` ให้เองแล้ว)
 5. Scaleform/Flash (เช่น Witcher 3) ไม่นับ ZWSP เป็นจุดตัด — ใช้ hairspace
-   และฟอนต์ต้องมี glyph ว่างที่ U+200A (ดู `docs/COMPATIBILITY.md`)
+   และฟอนต์ต้องมี glyph ว่างที่ U+200A (ดู `docs/COMPATIBILITY.md`) · ช่องว่างจริงหน้า ๆ
+   ("ต่าง ๆ") ยังเป็นจุดตัด → ต้องเป็น NBSP และฟอนต์ต้องวาด NBSP กว้างเท่าช่องว่าง
 6. **วลีห้ามตัด (`nobreak.txt`, v0.9.0)** — ครอบวลีทั้งก้อนแบบ mask ไม่มีจุดตัดใดภายใน
    และแทนช่องว่างกลางวลีด้วย NBSP (U+00A0) · การแทนแค่ช่องว่าง→NBSP ไม่พอ เพราะคำ
    unknown ในวลียังถูกแยกได้ · ต้อง idempotent (จับทั้งรูป space/NBSP) · เอนจินที่ตัดเฉพาะ
