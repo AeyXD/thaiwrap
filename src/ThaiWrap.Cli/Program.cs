@@ -403,9 +403,11 @@ namespace ThaiWrap.Cli
                 else if (cfg.InPlace)
                 {
                     string bak = path + ".bak";
-                    if (!File.Exists(bak)) File.Copy(path, bak); // เก็บ .bak รอบแรก (ต้นฉบับแท้) ไว้ตลอด
+                    // จำไว้ก่อน copy — เช็กหลัง copy จะจริงเสมอ log จึงไม่เคยบอกว่าสร้าง .bak ใหม่
+                    bool newBak = !File.Exists(bak);
+                    if (newBak) File.Copy(path, bak); // เก็บ .bak รอบแรก (ต้นฉบับแท้) ไว้ตลอด
                     WriteTextWithBom(path, output, enc);
-                    Console.Error.WriteLine("เขียนทับ" + (File.Exists(bak) ? "" : " (+.bak ใหม่)") + ": " + path + $"  [{BreakName(brk)} +{inserted}]");
+                    Console.Error.WriteLine("เขียนทับ" + (newBak ? " (+.bak ใหม่)" : "") + ": " + path + $"  [{BreakName(brk)} +{inserted}]");
                 }
                 else
                 {
