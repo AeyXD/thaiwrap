@@ -9,6 +9,13 @@ namespace ThaiWrap.Formats
     /// msgid, คอมเมนต์ (#, #., #~ ฯลฯ) และ entry ที่ไม่เปลี่ยน ถูกคงไว้ทั้งบรรทัดเดิม
     /// entry ที่ถูกแก้จะถูกยุบ msgstr เป็นบรรทัดเดียว (ยังเป็น PO ที่ถูกต้อง)
     /// </summary>
+    public sealed class PoEntry
+    {
+        public string MsgId = "";
+        public string MsgStr = "";
+        public int Line;
+    }
+
     public static class PoProcessor
     {
         public static string Process(string input, Func<string, string> transform)
@@ -51,6 +58,30 @@ namespace ThaiWrap.Formats
                 i++;
             }
             return string.Concat(output.ToArray());
+        }
+
+        /// <summary>คู่ msgid–msgstr ของไฟล์ (ไม่รวม header msgid "" และรายการเก่า #~) · Line = บรรทัดของ msgstr (1-based)</summary>
+        public static List<PoEntry> ParseEntries(string input)
+        {
+            var lines = TextLines.SplitKeepTerminators(input);
+            var entries = new List<PoEntry>();
+            string msgid = "";
+            int i = 0;
+            while (i < lines.Count)
+            {
+                string trimmed = lines[i].TrimStart();
+                bool isId = trimmed.StartsWith("msgid ", StringComparison.Ordinal) || trimmed.StartsWith("msgid\"", StringComparison.Ordinal);
+                bool isStr = trimmed.StartsWith("msgstr", StringComparison.Ordinal);
+                if (!isId && !isStr) { i++; continue; }
+                int start = i;
+                var block = new List<string> { lines[i] };
+                i++;
+                while (i < lines.Count && lines[i].TrimStart().StartsWith("\"", StringComparison.Ordinal)) block.Add(lines[i++]);
+                string value = ConcatDecoded(block);
+                if (isId) msgid = value;
+                else if (msgid.Length > 0) entries.Add(new PoEntry { MsgId = msgid, MsgStr = value, Line = start + 1 });
+            }
+            return entries;
         }
 
         private static string FirstToken(string line)

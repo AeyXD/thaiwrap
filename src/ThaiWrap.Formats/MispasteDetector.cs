@@ -48,22 +48,8 @@ namespace ThaiWrap.Formats
             foreach (var row in rows)
             {
                 r++;
-                string? thai = null, en = null;
-                int thaiCount = 0, enCount = 0;
-                foreach (var cell in row)
-                {
-                    if (cell == null) continue;
-                    int th = CountThai(cell);
-                    if (th > thaiCount) { thaiCount = th; thai = cell; }
-                }
-                if (thai == null) continue;
-                foreach (var cell in row)
-                {
-                    if (cell == null || ReferenceEquals(cell, thai)) continue;
-                    int lat = CountLatin(cell);
-                    if (lat > enCount) { enCount = lat; en = cell; }
-                }
-                if (en == null) continue;
+                PickThaiEnglish(row, out string? thai, out string? en);
+                if (thai == null || en == null) continue;
                 pairs.Add(new RowPair { RowNo = r, En = Norm(en), Thai = Norm(thai) });
             }
 
@@ -168,6 +154,30 @@ namespace ThaiWrap.Formats
                 lastSpace = false;
             }
             return sb.ToString().TrimEnd();
+        }
+
+        /// <summary>
+        /// คู่ไทย-อังกฤษของแถว: ไทย = เซลล์ที่มีอักษรไทยมากที่สุด · อังกฤษ = เซลล์อื่นที่มีอักษรละตินมากที่สุด
+        /// (ไม่ต้องรู้ชื่อคอลัมน์ — ใช้ร่วมกับตัวตรวจคำผิดตามบริบทใน --stats) · null = ไม่มีฝั่งนั้น
+        /// </summary>
+        public static void PickThaiEnglish(IReadOnlyList<string> row, out string? thai, out string? english)
+        {
+            thai = null;
+            english = null;
+            int thaiCount = 0, enCount = 0;
+            foreach (var cell in row)
+            {
+                if (cell == null) continue;
+                int th = CountThai(cell);
+                if (th > thaiCount) { thaiCount = th; thai = cell; }
+            }
+            if (thai == null) return;
+            foreach (var cell in row)
+            {
+                if (cell == null || ReferenceEquals(cell, thai)) continue;
+                int lat = CountLatin(cell);
+                if (lat > enCount) { enCount = lat; english = cell; }
+            }
         }
 
         private static int CountThai(string s)

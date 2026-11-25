@@ -45,6 +45,7 @@ dotnet build src/ThaiWrap.BepInEx -c Release   # plugin — ต้อง 0 warni
 | ที่อยู่ | หน้าที่ |
 |---|---|
 | `src/ThaiWrap/ThaiSegmenter.cs` | หัวใจ: DP optimal segmentation + trie + กฎพยัญชนะทวิภาค + วลีห้ามตัด (nobreak) + รวม `words_extra` |
+| `src/ThaiWrap/ThaiEnglishSense.cs` | ตัดข้อเสนอของตัวตรวจคำผิดด้วยต้นฉบับอังกฤษ (พอร์ต en_sense.py ของ W3) — CLI หาคู่อังกฤษจาก csv/tsv (เซลล์ละตินมากสุด) · po msgid · key=value · ข้อความที่มีตัวเลข/ขีดล่างไม่นับเป็นอังกฤษ (กันคอลัมน์ ID ซ่อนคำผิดจริง) |
 | `src/ThaiWrap/ThaiContextChecker.cs` | ตัวตรวจคำผิดตามบริบทใน `--stats` (ร↔ล + สะกดถูกแต่ผิดบริบท) — พอร์ต find_ral_swaps / find_wrong_word ของ W3 ผลตรง Python ทุกจุดบนคลัง W3 · ข้อยกเว้นเฉพาะเกมอยู่ใน `check_allow.txt` ของโปรเจกต์ ไม่ใส่ในโค้ด |
 | `src/ThaiWrap/ThaiNormalizer.cs` | `--normalize` ยุบรูปพิมพ์ผิด (เเ→แ, มาร์คซ้อน/ลำดับผิด) |
 | `src/ThaiWrap/ThaiChunker.cs` | รวมคำเป็นกลุ่มวลีสำหรับโหมด space (พอร์ตจาก ThaiW1Setup) |

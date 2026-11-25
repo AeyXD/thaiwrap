@@ -115,8 +115,9 @@ namespace ThaiWrap
     ///    แทบไม่เคยอยู่คู่เพื่อนบ้านนี้ (≤ 1 ครั้ง ทั้งสองด้าน) ขณะที่คู่สับสนอยู่คู่แบบเดียวกันแน่นอน (≥ 5 ครั้ง)
     ///    — ได้ผลเมื่อคลังใหญ่ (ทั้งโฟลเดอร์งานแปล) ไฟล์เล็กไฟล์เดียวแทบไม่มีผล
     ///
+    /// ส่งต้นฉบับอังกฤษมาด้วย (ถ้ามี) จะตัดข้อเสนอที่ต้นฉบับขัด — <see cref="ThaiEnglishSense"/> (en_sense.py)
     /// สิ่งที่**ไม่**พอร์ต: ALLOW/CONFIRMED_IN ที่เป็นชื่อเฉพาะหรือคำตัดสินของ W3 (อยู่ใน check_allow.txt
-    /// ของแต่ละโปรเจกต์แทน) และตัวกรองด้วยภาษาอังกฤษต้นฉบับ (en_sense.py)
+    /// ของแต่ละโปรเจกต์แทน)
     /// ตัดคำด้วย segmenter ของตัวเองที่ไม่รวมกลุ่มวลี (MaxChunk) — ผลไม่ขึ้นกับโหมด break char
     /// </summary>
     public sealed class ThaiContextChecker
@@ -188,7 +189,8 @@ namespace ThaiWrap
 
         // ================= ร↔ล =================
 
-        public List<Suggestion> CheckRal(string text)
+        /// <param name="english">ต้นฉบับอังกฤษของข้อความนี้ (ถ้ามี) — ใช้ตัดข้อเสนอที่จับผิดด้วย <see cref="ThaiEnglishSense"/></param>
+        public List<Suggestion> CheckRal(string text, string? english = null)
         {
             var hits = new List<Suggestion>();
             foreach (var run in ThaiRuns(text))
@@ -231,6 +233,7 @@ namespace ThaiWrap
                 .Where(h => !StartsLaWord(h, text))       // เอามาละลายน้ำ = มา + ละลาย ไม่ใช่ มาล่ะ
                 .Where(h => !NegatedParticle(h, text))    // ไม่ได้เผาหรอก = คำลงท้าย ไม่ใช่ หลอก
                 .Where(h => !Allowed(h, text))
+                .Where(h => !ThaiEnglishSense.RuledOut(h.Wrong, h.Suggested, english)) // รุกขึ้นเหนือ = push north
                 .ToList();
             return DropNested(kept);
         }
@@ -290,7 +293,8 @@ namespace ThaiWrap
             }
         }
 
-        public List<Suggestion> CheckWrongWord(string text)
+        /// <param name="english">ต้นฉบับอังกฤษของข้อความนี้ (ถ้ามี) — ขาพาไปไหนก็ไป + "wherever our legs carry us" = ขา ถูก</param>
+        public List<Suggestion> CheckWrongWord(string text, string? english = null)
         {
             var confusions = _confusions ??= BuildConfusions();
             var hits = new List<Suggestion>();
@@ -319,7 +323,7 @@ namespace ThaiWrap
                     }
                     if (best == null || support < MinSupport) continue;
                     var h = new Suggestion(tok, best, run.Starts[i], SuggestionKind.WrongWord);
-                    if (!Allowed(h, text)) hits.Add(h);
+                    if (!Allowed(h, text) && !ThaiEnglishSense.RuledOut(tok, best, english)) hits.Add(h);
                 }
             }
             return hits;

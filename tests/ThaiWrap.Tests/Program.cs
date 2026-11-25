@@ -435,6 +435,40 @@ namespace ThaiWrap.Tests
                 var ckNa = new ThaiContextChecker(words);
                 for (int k = 0; k < 5; k++) ckNa.AddCorpus("ไปกันเถอะนะเพื่อน");
                 Check("ctx word: คำลงท้ายที่ใช้ได้ทั้งสองรูป (น่ะ/นะ) ไม่ถูกเสนอ", ckNa.CheckWrongWord("ไปกันเถอะน่ะเพื่อน").Count == 0);
+
+                // กรองด้วยต้นฉบับอังกฤษ (พอร์ต en_sense.py ของ W3)
+                Check("en: ความหมายของคำเดิมอยู่ในอังกฤษ → คำเดิมถูก (ขา + legs)",
+                    ThaiEnglishSense.RuledOut("ขา", "ข้า", "wherever our legs carry us"));
+                Check("en: ความหมายของคำที่เสนอไม่มีในอังกฤษ → ไม่มีหลักฐานให้เปลี่ยน (รุก→ลุกขึ้น ไม่มี stand/rise)",
+                    ThaiEnglishSense.RuledOut("รุกขึ้น", "ลุกขึ้น", "push north"));
+                Check("en: อังกฤษยืนยันคำที่เสนอ = ยังเสนอ", !ThaiEnglishSense.RuledOut("รุกขึ้น", "ลุกขึ้น", "He rose and left"));
+                Check("en: ไม่มีอังกฤษ / คำนอกรายการ = ไม่ตัดสิน",
+                    !ThaiEnglishSense.RuledOut("ขา", "ข้า", null) && !ThaiEnglishSense.RuledOut("กข", "คง", "anything"));
+                Check("en: คำสั้น ≤3 ต้องจบคำ (pa ไม่ใช่ past)", !ThaiEnglishSense.RuledOut("พ่อ", "พอ", "in the past it was enough") &&
+                    ThaiEnglishSense.RuledOut("พ่อ", "พอ", "ask your pa"));
+                Check("en: คำใน Senses อยู่กลางช่วงคำได้ (แรก ใน แต่แรก) แต่ไม่ใช่ถ้ามีสระ/วรรณยุกต์ต่อท้าย (หมู ใน หมู่)",
+                    ThaiEnglishSense.RuledOut("แต่แลก", "แต่แรก", "for a price") && !ThaiEnglishSense.RuledOut("หมู่", "หมู", "pigs"));
+                var ckEn = new ThaiContextChecker(words);
+                for (int k = 0; k < 5; k++) ckEn.AddCorpus("พรุ่งนี้ข้าจะกลับมา");
+                Check("en: CheckWrongWord ตัดข้อเสนอเมื่ออังกฤษยืนยันคำเดิม",
+                    ckEn.CheckWrongWord("พรุ่งนี้ขาจะกลับมา", "my legs will carry me back").Count == 0 &&
+                    ckEn.CheckWrongWord("พรุ่งนี้ขาจะกลับมา", "I will be back").Count == 1);
+                // เคสจริงของ W3: "รุกขึ้นเหนือ" = push north — กลไกสลับเสนอ ลุกขึ้น แต่ต้นฉบับไม่มี stand/rise
+                Check("en: CheckRal ตัดข้อเสนอเมื่ออังกฤษไม่มีความหมายของคำที่เสนอ (รุกขึ้นเหนือ = push north)",
+                    Ral("กองทัพรุกขึ้นเหนือ").Contains(">ลุกขึ้น") && ck.CheckRal("กองทัพรุกขึ้นเหนือ", "the army pushed north").Count == 0 &&
+                    ck.CheckRal("กองทัพรุกขึ้นเหนือ", "the soldiers rose up").Count == 1, Ral("กองทัพรุกขึ้นเหนือ"));
+            }
+
+            Console.WriteLine("== คู่ไทย-อังกฤษสำหรับตัวตรวจคำผิด (csv แถว · po msgid) ==");
+            {
+                MispasteDetector.PickThaiEnglish(new[] { "item_01", "A sharp sword", "ดาบคม" }, out var th1, out var en1);
+                Check("pair: csv ไทย = เซลล์ไทยมากสุด · อังกฤษ = เซลล์ละตินมากสุด", th1 == "ดาบคม" && en1 == "A sharp sword", en1 ?? "-");
+                MispasteDetector.PickThaiEnglish(new[] { "1", "2" }, out var th2, out var en2);
+                Check("pair: แถวไม่มีไทย = null", th2 == null && en2 == null);
+                var poEntries = PoProcessor.ParseEntries("msgid \"\"\nmsgstr \"Content-Type: text/plain\"\n\nmsgid \"Hello\"\nmsgstr \"สวัสดี\"\n\n#~ msgid \"Old\"\n#~ msgstr \"เก่า\"\n");
+                Check("pair: po คู่ msgid–msgstr ข้าม header และ #~ · บรรทัดของ msgstr",
+                    poEntries.Count == 1 && poEntries[0].MsgId == "Hello" && poEntries[0].MsgStr == "สวัสดี" && poEntries[0].Line == 5,
+                    poEntries.Count.ToString());
             }
 
             Console.WriteLine("== formats: csv ==");

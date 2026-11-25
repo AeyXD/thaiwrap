@@ -43,7 +43,8 @@ namespace ThaiWrap.Cli
             public ThaiTextIssues Issues = new ThaiTextIssues(); // รูปพิมพ์ผิดที่พบในอินพุต (นับเมื่อ --stats)
             public Dictionary<string, int> UnknownCounts = new Dictionary<string, int>(); // คำนอกพจนานุกรม (เมื่อ --stats)
             public int CheckDirty; // ไฟล์ที่ยังมีข้อความไทยไม่ถูกแตรป (เมื่อ --check)
-            public List<KeyValuePair<string, string>> Docs = new List<KeyValuePair<string, string>>(); // (ไฟล์, อินพุต) สำหรับตัวตรวจคำผิด (เมื่อ --stats)
+            public List<CheckEntry> Checks = new List<CheckEntry>(); // ข้อความไทย (+อังกฤษถ้ามี) สำหรับตัวตรวจคำผิด (เมื่อ --stats)
+            public int CheckFiles;
         }
 
         public static int Main(string[] args)
@@ -436,7 +437,8 @@ namespace ThaiWrap.Cli
                 // นับจากอินพุตดิบทั้งไฟล์ — ค่าประมาณ (ไม่รู้เรื่อง mask/คอลัมน์ที่เลือก) แต่พอใช้เตือน
                 var issues = ThaiNormalizer.Count(input);
                 CollectUnknowns(segmenter, input, totals.UnknownCounts);
-                totals.Docs.Add(new KeyValuePair<string, string>(path, input));
+                totals.Checks.AddRange(BuildCheckEntries(path, input, format ?? "text"));
+                totals.CheckFiles++;
                 totals.Issues.DoubleE += issues.DoubleE;
                 totals.Issues.DoubledMark += issues.DoubledMark;
                 totals.Issues.MarkOrder += issues.MarkOrder;
@@ -531,30 +533,102 @@ namespace ThaiWrap.Cli
         /// </summary>
         private static void PrintContextSuggestions(Config cfg, Totals totals, int top)
         {
-            if (cfg.CheckWords == null || totals.Docs.Count == 0) return;
+            if (cfg.CheckWords == null || totals.Checks.Count == 0) return;
             var checker = new ThaiContextChecker(cfg.CheckWords, cfg.CheckAllow);
-            foreach (var doc in totals.Docs) checker.AddCorpus(doc.Value);
+            foreach (var e in totals.Checks) checker.AddCorpus(e.Text);
 
             var groups = new Dictionary<string, SuggestionGroup>();
-            foreach (var doc in totals.Docs)
+            int withEnglish = 0;
+            foreach (var e in totals.Checks)
             {
-                foreach (var s in checker.CheckRal(doc.Value).Concat(checker.CheckWrongWord(doc.Value)))
+                if (e.English != null) withEnglish++;
+                foreach (var s in checker.CheckRal(e.Text, e.English).Concat(checker.CheckWrongWord(e.Text, e.English)))
                 {
                     string key = (int)s.Kind + "\u0001" + s.Wrong + "\u0001" + s.Suggested;
                     if (!groups.TryGetValue(key, out var g))
-                        groups[key] = g = new SuggestionGroup { First = s, Path = doc.Key, Text = doc.Value };
+                        groups[key] = g = new SuggestionGroup { First = s, Entry = e };
                     g.Count++;
                 }
             }
+            if (withEnglish > 0)
+                Console.Error.WriteLine("ตัวตรวจคำผิดใช้ต้นฉบับอังกฤษตัดข้อเสนอที่ขัดกับต้นฉบับ: " + withEnglish + "/" + totals.Checks.Count + " ข้อความมีคู่อังกฤษ");
             PrintSuggestionKind(groups.Values, SuggestionKind.RalSwap, "คำที่น่าจะพิมพ์สลับ ร↔ล / สะกดผิด", top);
             PrintSuggestionKind(groups.Values, SuggestionKind.WrongWord,
-                "คำที่สะกดถูกแต่น่าจะผิดบริบท (" + totals.Docs.Count + " ไฟล์เป็นคลังสถิติ — ยิ่งคลังใหญ่ยิ่งแม่น)", top);
+                "คำที่สะกดถูกแต่น่าจะผิดบริบท (" + totals.CheckFiles + " ไฟล์เป็นคลังสถิติ — ยิ่งคลังใหญ่ยิ่งแม่น)", top);
+        }
+
+        /// <summary>ข้อความหนึ่งชิ้นสำหรับตัวตรวจคำผิด — ไทย + ต้นฉบับอังกฤษ (ถ้าหาได้) + ตำแหน่งสำหรับรายงาน</summary>
+        private sealed class CheckEntry
+        {
+            public string Path = "", Text = "";
+            public string? English;
+            public int Line;     // บรรทัดแรกของข้อความ (หรือเลขแถวเมื่อ IsRow)
+            public bool IsRow;   // csv/tsv: รายงานเป็น "แถว N"
+        }
+
+        /// <summary>
+        /// แยกไฟล์เป็นข้อความที่มีคู่อังกฤษ: csv/tsv = เซลล์ไทยกับเซลล์ละตินมากสุดของแถว (แบบ --mispaste) ·
+        /// po = msgstr กับ msgid · keyvalue = ค่ากับ key · ฟอร์แมตอื่นทั้งไฟล์เป็นชิ้นเดียวไม่มีอังกฤษ
+        /// </summary>
+        private static List<CheckEntry> BuildCheckEntries(string path, string input, string format)
+        {
+            var list = new List<CheckEntry>();
+            switch (format)
+            {
+                case "csv":
+                case "tsv":
+                {
+                    var table = CsvProcessor.ParseTable(input, format == "tsv" ? '\t' : DetectCsvDelimiter(input));
+                    for (int r = 0; r < table.Count; r++)
+                    {
+                        MispasteDetector.PickThaiEnglish(table[r], out string? thai, out string? en);
+                        if (thai != null) list.Add(new CheckEntry { Path = path, Text = thai, English = AsEnglish(en), Line = r + 1, IsRow = true });
+                    }
+                    return list;
+                }
+                case "po":
+                    foreach (var e in PoProcessor.ParseEntries(input))
+                        list.Add(new CheckEntry { Path = path, Text = e.MsgStr, English = AsEnglish(e.MsgId), Line = e.Line });
+                    return list;
+                case "keyvalue":
+                {
+                    int lineNo = 0;
+                    foreach (var line in TextLines.SplitKeepTerminators(input))
+                    {
+                        lineNo++;
+                        string content = TextLines.StripTerminator(line, out _);
+                        int eq = content.IndexOf('=');
+                        if (eq <= 0 || content.TrimStart().StartsWith("#", StringComparison.Ordinal)) continue;
+                        list.Add(new CheckEntry { Path = path, Text = content.Substring(eq + 1), English = AsEnglish(content.Substring(0, eq)), Line = lineNo });
+                    }
+                    return list;
+                }
+                default:
+                    list.Add(new CheckEntry { Path = path, Text = input, Line = 1 });
+                    return list;
+            }
+        }
+
+        /// <summary>
+        /// ใช้เป็นต้นฉบับอังกฤษเฉพาะเมื่อดูเป็นถ้อยคำจริง (คำละตินล้วน ไม่มีตัวเลข/ขีดล่าง) — คอลัมน์ ID อย่าง
+        /// item_sword_01 หรือ key ภาษาอื่นจะทำให้กฎ "ไม่มีความหมายของคำที่เสนอในอังกฤษ" ซ่อนคำผิดจริง
+        /// </summary>
+        private static string? AsEnglish(string? s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return null;
+            int letters = 0;
+            foreach (char c in s!)
+            {
+                if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) letters++;
+                else if (char.IsDigit(c) || c == '_' || (c >= '\u0E00' && c <= '\u0E7F')) return null;
+            }
+            return letters >= 3 ? s : null;
         }
 
         private sealed class SuggestionGroup
         {
             public Suggestion First = null!;
-            public string Path = "", Text = "";
+            public CheckEntry Entry = null!;
             public int Count;
         }
 
@@ -569,12 +643,19 @@ namespace ThaiWrap.Cli
             foreach (var g in list.Take(top))
             {
                 var s = g.First;
-                int line = 1;
-                for (int i = 0; i < s.Start; i++) if (g.Text[i] == '\n') line++;
-                int from = Math.Max(0, s.Start - 20), to = Math.Min(g.Text.Length, s.End + 20);
-                string ctx = g.Text.Substring(from, to - from).Replace('\n', ' ').Replace('\r', ' ');
+                var e = g.Entry;
+                string where;
+                if (e.IsRow) where = " แถว " + e.Line;
+                else
+                {
+                    int line = e.Line;
+                    for (int i = 0; i < s.Start; i++) if (e.Text[i] == '\n') line++;
+                    where = ":" + line;
+                }
+                int from = Math.Max(0, s.Start - 20), to = Math.Min(e.Text.Length, s.End + 20);
+                string ctx = e.Text.Substring(from, to - from).Replace('\n', ' ').Replace('\r', ' ');
                 Console.Error.WriteLine("  " + s.Wrong + " → " + s.Suggested + " ×" + g.Count +
-                    "   " + Path.GetFileName(g.Path) + ":" + line + "  …" + ctx + "…");
+                    "   " + Path.GetFileName(e.Path) + where + "  …" + ctx + "…");
             }
             if (list.Count > top)
                 Console.Error.WriteLine("  (อีก " + (list.Count - top) + " รูป — ใส่รูปที่ตรวจแล้วว่าถูกใน check_allow.txt เพื่อไม่ให้ขึ้นซ้ำ)");
