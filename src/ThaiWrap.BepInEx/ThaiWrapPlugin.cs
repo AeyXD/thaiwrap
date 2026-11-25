@@ -14,7 +14,7 @@ namespace ThaiWrap.BepInEx
     {
         public const string PluginGuid = "thaiwrap.plugin";
         public const string PluginName = "ThaiWrap";
-        public const string PluginVersion = "0.10.0";
+        public const string PluginVersion = "0.11.0";
 
         internal static ThaiTextFilter? Filter;
         internal static ManualLogSource? Log;
