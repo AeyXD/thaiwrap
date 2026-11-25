@@ -49,10 +49,10 @@ dotnet build src/ThaiWrap.BepInEx -c Release   # plugin — ต้อง 0 warni
 | `src/ThaiWrap.Formats/` | parser csv/tsv/json/po/keyvalue — อนุรักษ์เดิม · `MispasteDetector` (--mispaste) |
 | `src/ThaiWrap.Cli/` | CLI + options |
 | `src/ThaiWrap.BepInEx/` | plugin hook TMP/UGUI ตอนเกมรัน (net35) · แผนทดสอบ `docs/PLUGIN-TEST-PLAN.md` |
-| `tests/ThaiWrap.Tests/` | invariant + ชุดประโยคเกม — 143 checks ณ v0.9.0 (console runner) |
+| `tests/ThaiWrap.Tests/` | invariant + ชุดประโยคเกม — 152 checks หลังพอร์ตไม้ยมก (console runner) |
 | `data/words_th.txt` | พจนานุกรม (65,758 คำ ณ v0.9.0) |
 | `nobreak.txt` · `words_extra.txt` | วลีห้ามตัด · คำเฉพาะเกม — ไฟล์ของผู้ใช้ วางข้าง word list (ไม่อยู่ใน repo) |
-| `web/` | หน้าทดสอบ visual — `thaiwrap.js` เป็น **JS port ของ core** ณ v0.4.0 (ยังไม่มี normalize/โหมด space/words_extra/nobreak · ไม่มีเทสใน CI) |
+| `web/` | หน้าทดสอบ visual — `thaiwrap.js` เป็น **JS port ของ core** ณ v0.4.0 (ยังไม่มี normalize/โหมด space/words_extra/nobreak/yamok-nbsp · ไม่มีเทสใน CI) |
 | `tools/` | `fetch-bepinex.sh` (refs สำหรับ build plugin) · `package-plugin.sh` (zip ปล่อยเวอร์ชัน) · patch ฟอนต์ · ทดสอบ Godot |
 | `publish/` | binary single-file ของ CLI ต่อ RID (commit ไว้ใน repo) |
 | `docs/COMPATIBILITY.md` | ความเข้ากันได้เอนจิน/ฟอนต์ (ZWSP vs hairspace · NBSP สำหรับวลีห้ามตัด) |
@@ -82,7 +82,9 @@ dotnet build src/ThaiWrap.BepInEx -c Release   # plugin — ต้อง 0 warni
    (csproj ตั้ง single-file และคัด `data/words_th.txt` ไปที่ `data/` ให้เองแล้ว)
 5. Scaleform/Flash (เช่น Witcher 3) ไม่นับ ZWSP เป็นจุดตัด — ใช้ hairspace
    และฟอนต์ต้องมี glyph ว่างที่ U+200A (ดู `docs/COMPATIBILITY.md`) · ช่องว่างจริงหน้า ๆ
-   ("ต่าง ๆ") ยังเป็นจุดตัด → ต้องเป็น NBSP และฟอนต์ต้องวาด NBSP กว้างเท่าช่องว่าง
+   ("ต่าง ๆ") ยังเป็นจุดตัด → ต้องเป็น NBSP (`--yamok-nbsp` / plugin `YamokNbsp` · opt-in)
+   และฟอนต์ต้องวาด NBSP กว้างเท่าช่องว่าง · เปิดแล้ว round-trip "ลบ ZWSP = ต้นฉบับ" ไม่จริงอีก
+   (space→NBSP) เหมือน `--normalize`
 6. **วลีห้ามตัด (`nobreak.txt`, v0.9.0)** — ครอบวลีทั้งก้อนแบบ mask ไม่มีจุดตัดใดภายใน
    และแทนช่องว่างกลางวลีด้วย NBSP (U+00A0) · การแทนแค่ช่องว่าง→NBSP ไม่พอ เพราะคำ
    unknown ในวลียังถูกแยกได้ · ต้อง idempotent (จับทั้งรูป space/NBSP) · เอนจินที่ตัดเฉพาะ

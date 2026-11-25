@@ -74,7 +74,7 @@ thaiwrap แก้ที่ตัวข้อความ: ตัดคำด้
 | เกม / เอนจิน | จุดตัดที่ใช้ได้ | วิธีใช้ |
 |---|---|---|
 | **Unity (TextMeshPro)**, Ren'Py, เอนจินส่วนใหญ่ | ZWSP (U+200B) มองไม่เห็น | default — ใช้เลยไม่ต้องใส่อะไร |
-| **Scaleform/Flash** (Witcher 3, เกม AAA จำนวนมาก) | ไม่นับ ZWSP — ต้องใช้ hair space (U+200A) | `--break-char hairspace` + เติม glyph ว่างให้ฟอนต์ · ถ้าเว้นวรรคหน้า ๆ ให้ใช้ NBSP แทนช่องว่างนั้น ([docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)) |
+| **Scaleform/Flash** (Witcher 3, เกม AAA จำนวนมาก) | ไม่นับ ZWSP — ต้องใช้ hair space (U+200A) | `--break-char hairspace` + เติม glyph ว่างให้ฟอนต์ · ถ้าเว้นวรรคหน้า ๆ ใส่ `--yamok-nbsp` ([docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)) |
 | **เอนจินที่ตัดเฉพาะช่องว่างจริง** (Aurora เช่น Witcher 1) | ไม่นับทั้ง ZWSP และ hair space | `--break-char space` — เว้นช่องว่างจริงแบบกลุ่มวลี (ดูหัวข้อถัดไป) |
 | **Godot 4** | ตัดไทยเองได้อยู่แล้ว | ไม่จำเป็นต้องใช้ (ใช้ก็ไม่เสียหาย) |
 | **RPG Maker MZ** | ตัดระดับตัวอักษร | ZWSP ไม่ช่วย — ต้องแก้ที่ plugin จัดการตัดบรรทัดเอง |
@@ -120,7 +120,7 @@ dotnet run --project src/ThaiWrap.Cli -- th.txt -f keyvalue -o th.out.txt
 (ถ้าใช้ binary จาก `publish/` แทน `dotnet run ... --` ด้วยชื่อไฟล์โปรแกรมตรง ๆ เช่น
 `./ThaiWrap.Cli tests/samples/items.csv --columns thai --dry-run`)
 
-Options หลัก: `-f auto|text|csv|tsv|json|po|keyvalue` · `--columns "1,3" หรือ "ชื่อ"` · `--json-keys "desc,tooltip"` · `--break-char zwsp|hairspace|space` · `--chunk <n>` · `--min-len <n>` · `--normalize` · `--dry-run` (diff, ZWSP แสดงเป็น ·) · `--mispaste` (ตรวจวางผิดแถว) · `--check` (lint สำหรับ CI) · `-r` · `--inplace` (+.bak) · `--maxword` (0=ไม่จำกัด) · `--unknown-threshold` · `--stats`
+Options หลัก: `-f auto|text|csv|tsv|json|po|keyvalue` · `--columns "1,3" หรือ "ชื่อ"` · `--json-keys "desc,tooltip"` · `--break-char zwsp|hairspace|space` · `--chunk <n>` · `--min-len <n>` · `--normalize` · `--yamok-nbsp` (ช่องว่างหน้า ๆ → NBSP) · `--dry-run` (diff, ZWSP แสดงเป็น ·) · `--mispaste` (ตรวจวางผิดแถว) · `--check` (lint สำหรับ CI) · `-r` · `--inplace` (+.bak) · `--maxword` (0=ไม่จำกัด) · `--unknown-threshold` · `--stats`
 
 ## ไฟล์งานแปลที่รองรับ
 

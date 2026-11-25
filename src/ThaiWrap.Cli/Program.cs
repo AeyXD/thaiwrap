@@ -237,6 +237,7 @@ namespace ThaiWrap.Cli
                         cfg.Normalize = true;
                         cfg.Options.Normalize = true;
                         break;
+                    case "--yamok-nbsp": cfg.Options.YamokNbsp = true; break;
                     case "--max-diff": cfg.MaxDiff = ParseInt(args, ref i, 0); break;
                     case "--maxword": cfg.Options.MaxWordLength = ParseInt(args, ref i, 0); break;
                     case "--unknown-threshold": cfg.Options.UnknownBreakThreshold = ParseInt(args, ref i, 1); break;
@@ -721,6 +722,7 @@ namespace ThaiWrap.Cli
             "  --min-len <n>         งดแตะข้อความที่ทุกบรรทัดสั้นกว่า N ตัวอักษรไทย (space default 40 · 0=แตะทุกรายการ)\n" +
             "  --dry-run             แสดง diff (ZWSP แสดงเป็น ·) โดยไม่เขียนไฟล์\n" +
             "  --normalize           ยุบรูปพิมพ์ผิดก่อนตัดคำ: เเ→แ · มาร์คซ้อน/ลำดับมาร์คผิด · ํ+า→ำ · วรรณยุกต์หลังสระหน้า\n" +
+            "  --yamok-nbsp          ช่องว่างหน้า ๆ (\"ต่าง ๆ\") → NBSP กันบรรทัดขึ้นต้นด้วย ๆ (ฟอนต์ต้องวาด U+00A0 กว้างเท่าช่องว่าง)\n" +
             "  -r, --recursive       โหมด folder: เดินทั้งต้นไม้\n" +
             "  --inplace             โหมด folder: เขียนทับไฟล์เดิม + สำรอง .bak (default: สร้าง <ชื่อ>.zwsp.<ext>)\n" +
             "  --max-diff <n>        จำนวนบรรทัด diff สูงสุดที่แสดง (default 40)\n" +

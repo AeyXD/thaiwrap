@@ -381,8 +381,37 @@ namespace ThaiWrap
         private string ProcessNormal(string text, Func<string, string> raw)
         {
             if (_options.Normalize) text = ThaiNormalizer.Normalize(text);
-            return WrapNoBreak(text, raw);
+            string result = WrapNoBreak(text, raw);
+            return _options.YamokNbsp ? KeepYamokOnWord(result) : result;
         }
+
+        /// <summary>
+        /// ช่วงช่องว่างที่ติดหน้า ๆ (U+0020 / ZWSP / hairspace): U+0020 → NBSP ตัวต่อตัว ส่วน ZWSP/hairspace
+        /// ถูกตัดทิ้ง เพราะเป็นจุดตัดที่ทำให้ ๆ ขึ้นต้นบรรทัด · ผลไม่มีอะไรให้จับซ้ำ จึง idempotent
+        /// </summary>
+        private static string KeepYamokOnWord(string text)
+        {
+            if (text.IndexOf('ๆ') < 0) return text;
+            var sb = new StringBuilder(text.Length);
+            int i = 0, n = text.Length;
+            while (i < n)
+            {
+                if (!IsYamokSpace(text[i])) { sb.Append(text[i]); i++; continue; }
+                int j = i;
+                while (j < n && IsYamokSpace(text[j])) j++;
+                bool beforeYamok = j < n && text[j] == 'ๆ';
+                for (int k = i; k < j; k++)
+                {
+                    char c = text[k];
+                    if (!beforeYamok) sb.Append(c);
+                    else if (c == ' ') sb.Append(' ');
+                }
+                i = j;
+            }
+            return sb.ToString();
+        }
+
+        private static bool IsYamokSpace(char c) => c == ' ' || c == ' ' || c == '​';
 
         /// <summary>
         /// วลีห้ามตัดกลางวลี (NoBreakPhrases): แยกข้อความเป็นช่วงวลี/ช่วงปกติ — ช่วงวลีส่งออก

@@ -355,6 +355,36 @@ namespace ThaiWrap.Tests
             }
             finally { File.Delete(nbTmp); }
 
+            Console.WriteLine("== ไม้ยมกแบบเว้นวรรค → NBSP (พอร์ต YAMOK_SPACE จาก ThaiW3Setup 5535611) ==");
+            {
+                var nb = ' ';
+                var segYm = ThaiSegmenter.FromFile(wordList, new ThaiWrapOptions { YamokNbsp = true });
+                // เคสชุดเดียวกับ devtools/test_thai_wrap.py ของ W3
+                string y1 = segYm.InsertZwsp("ต่าง ๆ นานา");
+                Check("yamok: ช่องว่างหน้า ๆ → NBSP · ช่องว่างหลัง ๆ ยังเป็น space",
+                    y1.Replace(zw.ToString(), "") == "ต่าง" + nb + "ๆ นานา", Show(y1));
+                Check("yamok: ๆ ซ้อน + เครื่องหมายท้าย", segYm.InsertZwsp("เร็ว ๆๆ!") == "เร็ว" + nb + "ๆๆ!");
+                Check("yamok: ช่องว่างสองตัว → NBSP สองตัว (ต่างจาก W3 ที่ยุบเหลือตัวเดียว — อนุรักษ์ข้อมูลเดิม)",
+                    segYm.InsertZwsp("จริง  ๆ") == "จริง" + nb + nb + "ๆ");
+                Check("yamok: ๆ ต้นข้อความ / ไม่มี ๆ = ไม่มี NBSP",
+                    !segYm.InsertZwsp("ๆ ต้นข้อความ").Contains(nb) && !segYm.InsertZwsp("ไม่มี ไม้ยมก").Contains(nb));
+                // ประโยคเกมจริงยาวพอให้มีจุดตัดรอบ ๆ — ข้อความทดสอบในกล่อง Glossary ของ W3 ใช้รูปแบบนี้
+                string y2 = segYm.InsertZwsp("ชาวบ้านต่าง ๆ พากันหนีออกจากหมู่บ้านเมื่อเห็นสัตว์ประหลาดเดินเข้ามาใกล้ ๆ กำแพงเมือง");
+                Check("yamok: ประโยคยาว — ไม่มีจุดตัดใดติดหน้า ๆ และ ๆ ทุกตัวติด NBSP",
+                    !y2.Contains(" ๆ") && !y2.Contains(zw + "ๆ") && CountOccurrences(y2, nb + "ๆ") == 2 && y2.Contains(zw), Show(y2));
+                Check("yamok: idempotent (รันซ้ำผลเดิม)", segYm.InsertZwsp(y2) == y2);
+                var segYmHair = ThaiSegmenter.FromFile(wordList, new ThaiWrapOptions { YamokNbsp = true, BreakChar = ' ' });
+                string y3 = segYmHair.InsertZwsp("ต่าง  ๆ นานา​ๆ");
+                Check("yamok: ZWSP/hairspace ที่ติดหน้า ๆ ถูกตัดทิ้ง (เป็นจุดตัดหน้า ๆ)",
+                    !y3.Contains(" ๆ") && !y3.Contains(zw + "ๆ") && y3.Contains("ต่าง" + nb + "ๆ"), Show(y3));
+                var segYmNb = ThaiSegmenter.FromFile(wordList,
+                    new ThaiWrapOptions { YamokNbsp = true, NoBreakPhrases = new List<string> { "เดอะ วิทเชอร์" } });
+                string y4 = segYmNb.InsertZwsp("แฟนเดอะ วิทเชอร์ต่าง ๆ รอคอยภาคใหม่มานานหลายปีแล้ว");
+                Check("yamok: ทำงานร่วมกับ nobreak", y4.Contains("เดอะ" + nb + "วิทเชอร์") && y4.Contains("ต่าง" + nb + "ๆ"), Show(y4));
+                Check("yamok: ปิดอยู่ (default) = พฤติกรรมเดิม ช่องว่างหน้า ๆ คงเป็น space",
+                    seg.InsertZwsp("ต่าง ๆ นานา").Replace(zw.ToString(), "") == "ต่าง ๆ นานา");
+            }
+
             Console.WriteLine("== ร↔ล suggester (ข้อเสนอการสะกด — พอร์ตจาก find_ral_swaps ของ W3) ==");
             Check("ral: IsKnownWord ถูก (มี/ไม่มีใน dict)", seg.IsKnownWord("กระบี่") && !seg.IsKnownWord("บุกลุก"));
             Check("ral: บุกลุก → บุกรุก (เคสจริงจาก W3 — ทุกพยางค์เป็นคำจริงจึงรอดตัวตรวจคำสะกด)",

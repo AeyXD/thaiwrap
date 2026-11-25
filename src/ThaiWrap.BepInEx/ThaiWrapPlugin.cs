@@ -22,12 +22,14 @@ namespace ThaiWrap.BepInEx
         // ถูก bind ใน Awake() ตาม pattern ของ BepInEx — ไม่ใช่ใน constructor
         private ConfigEntry<bool>? _enabled;
         private ConfigEntry<bool>? _normalize;
+        private ConfigEntry<bool>? _yamokNbsp;
         private ConfigEntry<int>? _maxWordLength;
         private ConfigEntry<int>? _unknownBreakThreshold;
         private string? _wordListPath;
         private int _lastMaxWordLength;
         private int _lastUnknownThreshold;
         private bool _lastNormalize;
+        private bool _lastYamokNbsp;
 
         private void Awake()
         {
@@ -37,6 +39,8 @@ namespace ThaiWrap.BepInEx
                 "เปิด/ปิดการแทรก ZWSP ทั้งหมด (ไม่ต้องรีสตาร์ทเกม)");
             _normalize = Config.Bind("Segmentation", "Normalize", false,
                 "ยุบรูปพิมพ์ผิดก่อนตัดคำ: เเ→แ และสระจ่อย/วรรณยุกต์ซ้อนยุบเหลือตัวเดียว (แก้ตัวอักษรจริง — ปิดไว้เพื่ออนุรักษ์ข้อความต้นฉบับ)");
+            _yamokNbsp = Config.Bind("Segmentation", "YamokNbsp", false,
+                "ช่องว่างหน้าไม้ยมก (\"ต่าง ๆ\") → NBSP กันบรรทัดขึ้นต้นด้วย ๆ (ฟอนต์ต้องมี glyph U+00A0 กว้างเท่าช่องว่าง)");
             _maxWordLength = Config.Bind("Segmentation", "MaxWordLength", 0,
                 "ความยาวคำสูงสุดจากพจนานุกรม (0 = ไม่จำกัด — แนะนำสำหรับอัลกอริทึม DP)");
             _unknownBreakThreshold = Config.Bind("Segmentation", "UnknownBreakThreshold", 8,
@@ -55,6 +59,7 @@ namespace ThaiWrap.BepInEx
                 Filter = new ThaiTextFilter(segmenter) { Enabled = _enabled.Value };
                 _wordListPath = wordListPath;
                 _lastNormalize = _normalize!.Value;
+                _lastYamokNbsp = _yamokNbsp!.Value;
                 _lastMaxWordLength = _maxWordLength.Value;
                 _lastUnknownThreshold = _unknownBreakThreshold.Value;
                 Logger.LogInfo($"โหลดพจนานุกรม {segmenter.WordCount} คำ จาก {wordListPath}");
@@ -78,11 +83,12 @@ namespace ThaiWrap.BepInEx
                 Filter.Enabled = _enabled.Value;
 
             // config การตัดคำเปลี่ยนกลางเกม → สร้าง segmenter ใหม่ทันที
-            if (_wordListPath != null && _maxWordLength != null && _unknownBreakThreshold != null && _normalize != null &&
+            if (_wordListPath != null && _maxWordLength != null && _unknownBreakThreshold != null && _normalize != null && _yamokNbsp != null &&
                 (_maxWordLength.Value != _lastMaxWordLength || _unknownBreakThreshold.Value != _lastUnknownThreshold ||
-                 _normalize.Value != _lastNormalize))
+                 _normalize.Value != _lastNormalize || _yamokNbsp.Value != _lastYamokNbsp))
             {
                 _lastNormalize = _normalize.Value;
+                _lastYamokNbsp = _yamokNbsp.Value;
                 _lastMaxWordLength = _maxWordLength.Value;
                 _lastUnknownThreshold = _unknownBreakThreshold.Value;
                 try
@@ -105,6 +111,7 @@ namespace ThaiWrap.BepInEx
             var options = new ThaiWrapOptions
             {
                 Normalize = _normalize?.Value ?? false,
+                YamokNbsp = _yamokNbsp?.Value ?? false,
                 MaxWordLength = _maxWordLength?.Value ?? 0,
                 UnknownBreakThreshold = _unknownBreakThreshold?.Value ?? 8
             };
