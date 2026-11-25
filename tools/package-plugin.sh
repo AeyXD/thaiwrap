@@ -9,7 +9,8 @@ export DOTNET_ROOT="${DOTNET_ROOT:-$HOME/.dotnet}"
 ./tools/fetch-bepinex.sh
 dotnet build src/ThaiWrap.BepInEx/ThaiWrap.BepInEx.csproj -c Release
 
-rm -rf dist
+# ลบเฉพาะของตัวเอง — dist/thaiwrap-cli-*.zip จาก tools/publish.sh --zip ต้องอยู่รอดไปแนบ Release ด้วย
+rm -rf dist/ThaiWrap dist/ThaiWrap-BepInEx.zip
 mkdir -p dist/ThaiWrap
 cp src/ThaiWrap.BepInEx/bin/Release/ThaiWrap.BepInEx.dll dist/ThaiWrap/
 cp data/words_th.txt dist/ThaiWrap/
