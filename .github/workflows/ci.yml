@@ -32,6 +32,10 @@ jobs:
       - name: Run test suite
         run: dotnet run --project tests/ThaiWrap.Tests -c Release -- data/words_th.txt
 
+      # web/thaiwrap.js ต้องให้ผลตรงกับ CLI C# ทุกชุดตัวเลือก — กัน JS port ตามหลังเงียบๆ
+      - name: JS port parity (web/thaiwrap.js vs C#)
+        run: ./tools/js-parity.sh
+
       - name: CLI smoke test
         run: |
           # csv dry-run ต้องจบด้วย exit 0 และมี diff ให้ดู

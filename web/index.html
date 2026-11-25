@@ -27,6 +27,11 @@
     font-family: inherit; resize: vertical;
   }
   select, input[type="range"] { width: 100%; }
+  .check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; color: var(--text); margin: 10px 0 0; cursor: pointer; }
+  .check input { margin-top: 5px; }
+  .check small { display: block; color: var(--muted); font-size: 12px; }
+  textarea.small { height: 80px; font-size: 14px; }
+  .card details { margin-top: 12px; }
   select {
     background: #12141a; color: var(--text); border: 1px solid var(--border);
     border-radius: 8px; padding: 8px; font-family: inherit;
@@ -63,7 +68,7 @@
 <h1>thaiwrap <span class="tag">ทดสอบการตัดบรรทัดภาษาไทยในเกม</span></h1>
 <div class="sub">
   แผงซ้าย/ขวาคือการจำลองเอนจินเกมที่ตัดบรรทัดที่ "ช่องว่าง" เท่านั้น (เหมือน Unity/Unreal ส่วนใหญ่ก่อนแก้)
-  — ขวาคือข้อความเดียวกันหลังแทรก ZWSP ด้วยตัวตัดคำขอ thaiwrap ·
+  — ขวาคือข้อความเดียวกันหลังแทรกจุดตัดด้วยตัวตัดคำของ thaiwrap (ตรงกับ CLI v0.9.0) ·
   <a href="https://github.com/AeyXD/thaiwrap" style="color:var(--accent)">โค้ดบน GitHub</a> ·
   <a href="font_probe.html" style="color:var(--accent)">ทดสอบฟอนต์ ZWSP</a>
 </div>
@@ -90,19 +95,40 @@
       <option value='-apple-system, sans-serif'>System</option>
     </select>
 
+    <label>เอนจิน / ตัวคั่น</label>
+    <select id="engine">
+      <option value="zwsp">ZWSP — Unity TMP, Ren'Py, เอนจินทั่วไป</option>
+      <option value="hairspace">hair space — Scaleform (The Witcher 3)</option>
+      <option value="space">ช่องว่างจริง + กลุ่มวลี — Aurora (The Witcher 1)</option>
+    </select>
+
+    <label class="check"><input type="checkbox" id="normalize">
+      <span>--normalize <small>แก้รูปพิมพ์ผิดก่อนตัดคำ (เเ→แ · มาร์คซ้อน · นํ้า→น้ำ)</small></span></label>
+    <label class="check"><input type="checkbox" id="yamok">
+      <span>--yamok-nbsp <small>ช่องว่างหน้า ๆ เป็น NBSP — บรรทัดไม่ขึ้นต้นด้วย ๆ</small></span></label>
+
+    <details>
+      <summary>วลีห้ามตัด (nobreak.txt)</summary>
+      <textarea id="nobreak" class="small" placeholder="บรรทัดละวลี เช่น&#10;เดอะ วิทเชอร์"></textarea>
+    </details>
+    <details>
+      <summary>คำเฉพาะเกม (words_extra.txt)</summary>
+      <textarea id="extra" class="small" placeholder="บรรทัดละคำ · -คำ = ลบออกจากพจนานุกรม&#10;ทริสส์&#10;-ใช้การ"></textarea>
+    </details>
+
     <div class="stats" id="stats"></div>
   </div>
 
   <div>
     <div class="panels">
       <div class="card">
-        <div class="panel-title">ไม่มี ZWSP <span class="badge bad">สภาพเกมทั่วไป</span></div>
+        <div class="panel-title">ต้นฉบับ <span class="badge bad">สภาพเกมทั่วไป</span></div>
         <canvas id="plain" width="340"></canvas>
         <div class="legend">ตัวอักษร<span class="r">สีแดง</span> = ถูกตัดกลางคำเพราะเอนจินไม่เจอจุดตัด</div>
         <div class="stats" id="plainStats"></div>
       </div>
       <div class="card">
-        <div class="panel-title">มี ZWSP <span class="badge good">หลังใช้ thaiwrap</span></div>
+        <div class="panel-title"><span id="wrappedTitle">มี ZWSP</span> <span class="badge good">หลังใช้ thaiwrap</span></div>
         <canvas id="wrapped" width="340"></canvas>
         <div class="legend">ตัดเฉพาะรอยต่อระหว่างคำจากพจนานุกรม</div>
         <div class="stats" id="wrappedStats"></div>
@@ -149,10 +175,36 @@ const SAMPLES = [
   'ดาบเพลิงพสุธา ปลดปล่อยพลังแห่งเพลิงใส่ศัตรูทั้งหมดในรัศมี 5 เมตร',
   'มิธิล ราชินีแห่งน้ำแข็ง ถือครองพลังแห่งฤดูหนาวบทสรุป',
   'เรือนำของกองทัพเรือถูกพายุโหมกระหน่ำจนอับปางลงกลางมหาสมุทร',
+  'ชาวบ้านต่าง ๆ พากันหนีออกจากหมู่บ้านเมื่อเห็นสัตว์ประหลาดเดินเข้ามาใกล้ ๆ กำแพงเมือง',
+  'ตัวละครในเดอะ วิทเชอร์ต้องเดินทางไกลข้ามแผ่นดินที่สงบสุขเสมอ ทริสส์ เมอริโกลด์รอเขาอยู่ที่โนวิกราด',
+  'ข้าเริ่มโกรธเเล้วนะ สวััสดีท่านผู้กล้า นํ้าในแม่นํ้าดํ่าลงทุกวัน',
 ];
 
+// เอนจินแต่ละแบบ: ตัวคั่นที่แทรก + จุดตัดที่เอนจินนับ (ใช้ทั้งการแปลงและการจำลองบน canvas)
+const ENGINES = {
+  zwsp: { label: 'มี ZWSP', options: { breakChar: ZWSP }, breaks: [' ', ZWSP] },
+  hairspace: { label: 'มี hair space', options: { breakChar: HAIRSPACE }, breaks: [' ', HAIRSPACE] },
+  space: { label: 'เว้นวรรคเป็นกลุ่มวลี', options: { breakChar: ' ', maxChunk: 12, minThaiLength: 40 }, breaks: [' '] },
+};
+
 const $ = id => document.getElementById(id);
-const segmenter = new ThaiSegmenter(window.THAI_WORDS, {});
+let segmenter = null, mergeInfo = null, builtKey = '';
+
+// สร้าง segmenter ใหม่เมื่อตัวเลือกเปลี่ยน (พจนานุกรม 65k คำ — สร้างเฉพาะตอนจำเป็น)
+function currentSegmenter() {
+  const engine = ENGINES[$('engine').value];
+  const extra = $('extra').value, nobreak = $('nobreak').value;
+  const key = [$('engine').value, $('normalize').checked, $('yamok').checked, extra, nobreak].join('\u0001');
+  if (key === builtKey) return segmenter;
+  mergeInfo = mergeWordLists(window.THAI_WORDS, extra);
+  segmenter = new ThaiSegmenter(mergeInfo.words, Object.assign({}, engine.options, {
+    normalize: $('normalize').checked,
+    yamokNbsp: $('yamok').checked,
+    noBreakPhrases: loadNoBreakPhrases(nobreak),
+  }));
+  builtKey = key;
+  return segmenter;
+}
 
 const sampleSel = $('sample');
 SAMPLES.forEach((s, i) => {
@@ -163,7 +215,7 @@ SAMPLES.forEach((s, i) => {
 $('input').value = SAMPLES[1];
 sampleSel.addEventListener('change', () => { $('input').value = SAMPLES[sampleSel.value]; render(); });
 
-function drawPanel(canvasId, text, width, font, fontSize) {
+function drawPanel(canvasId, text, width, font, fontSize, breaks) {
   const canvas = $(canvasId);
   const dpr = window.devicePixelRatio || 1;
   const pad = 14;
@@ -174,7 +226,7 @@ function drawPanel(canvasId, text, width, font, fontSize) {
   ctx.font = fontSize + 'px ' + font;
 
   const lineHeight = Math.round(fontSize * 1.7);
-  const { lines, hardCuts } = simulateEngineWrap(ctx, text, width);
+  const { lines, hardCuts } = simulateEngineWrap(ctx, text, width, breaks);
 
   const boxH = lines.length * lineHeight + pad * 2;
   canvas.height = (boxH + 10) * dpr;
@@ -214,17 +266,24 @@ function render() {
   $('wval').textContent = width;
   $('fsval').textContent = fontSize;
 
-  const wrapped = segmenter.insertZwsp(text);
+  const engine = ENGINES[$('engine').value];
+  const seg = currentSegmenter();
+  const wrapped = seg.insertZwsp(text);
+  $('wrappedTitle').textContent = engine.label;
 
-  const a = drawPanel('plain', text, width, font, fontSize);
-  const b = drawPanel('wrapped', wrapped, width, font, fontSize);
+  const a = drawPanel('plain', text, width, font, fontSize, engine.breaks);
+  const b = drawPanel('wrapped', wrapped, width, font, fontSize, engine.breaks);
 
   $('plainStats').innerHTML = 'จำนวนบรรทัด <b>' + a.lines + '</b> · ถูกตัดกลางคำ <b style="color:var(--bad)">' + a.hardCuts + '</b> จุด';
   $('wrappedStats').innerHTML = 'จำนวนบรรทัด <b>' + b.lines + '</b> · ถูกตัดกลางคำ <b style="color:' + (b.hardCuts ? 'var(--bad)' : 'var(--good)') + '">' + b.hardCuts + '</b> จุด';
 
   // segmentation report
-  const tokens = segmenter.tokenize(text);
-  const zwCount = (wrapped.match(/\u200B/g) || []).length;
+  const tokens = seg.tokenize(seg.options.normalize ? ThaiNormalizer.normalize(text) : text);
+  const count = (s, c) => s.split(c).length - 1;
+  const nbsp = count(wrapped, NBSP) - count(text, NBSP);
+  // โหมดช่องว่างจริง: ช่องว่างเดิมที่กลายเป็น NBSP (วลีห้ามตัด/ไม้ยมก) ทำให้จำนวนช่องว่างลดลง — บวกคืน
+  const inserted = count(wrapped, seg.options.breakChar) - count(text, seg.options.breakChar) +
+    (seg.options.breakChar === ' ' ? nbsp : 0);
   let html = '';
   for (const t of tokens) {
     if (t.kind === 'Whitespace') { html += t.text; continue; }
@@ -237,13 +296,16 @@ function render() {
   $('stats').innerHTML =
     'คำจากพจนานุกรม <b>' + words + '</b> · ช่วงไม่รู้จัก <b>' + unknown + '</b> ' +
     '<span style="color:var(--muted)">(แถบสีแดงในผลการตัดคำ)</span><br>' +
-    'ZWSP ที่แทรก <b>' + zwCount + '</b> จุด · พจนานุกรม <b>' + segmenter.words.size.toLocaleString() + '</b> คำ';
+    'จุดตัดที่แทรก <b>' + Math.max(0, inserted) + '</b> จุด' + (nbsp > 0 ? ' · NBSP <b>' + nbsp + '</b> จุด' : '') +
+    ' · พจนานุกรม <b>' + seg.words.size.toLocaleString() + '</b> คำ' +
+    (mergeInfo.added || mergeInfo.removed ? ' (words_extra +' + mergeInfo.added + ' −' + mergeInfo.removed + ')' : '') +
+    (seg.options.minThaiLength > 0 && wrapped === text ? '<br><span style="color:var(--muted)">โหมดช่องว่างจริงไม่แตะข้อความที่ทุกบรรทัดสั้นกว่า 40 ตัวอักษรไทย</span>' : '');
 
   $('browserPlain').textContent = text;
   $('browserWrapped').textContent = wrapped;
 }
 
-['input', 'width', 'fontsize', 'font'].forEach(id => {
+['input', 'width', 'fontsize', 'font', 'engine', 'normalize', 'yamok', 'nobreak', 'extra'].forEach(id => {
   $(id).addEventListener('input', render);
   $(id).addEventListener('change', render);
 });

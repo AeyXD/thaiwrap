@@ -27,6 +27,7 @@ dotnet run --project src/ThaiWrap.Cli -- data/ -r --check ; echo $?           # 
 
 ./tools/fetch-bepinex.sh                       # ครั้งแรก — ดาวน์โหลด BepInEx refs (lib/ ไม่ commit)
 dotnet build src/ThaiWrap.BepInEx -c Release   # plugin — ต้อง 0 warning 0 error
+./tools/js-parity.sh                           # web/thaiwrap.js ต้องตรงกับ CLI C# (ต้องมี node)
 ```
 
 - **อย่าใช้ `dotnet test`** — โปรเจกต์เทสเป็น console runner (ไม่ใช่ xunit) เดิมคำสั่งนี้
@@ -52,7 +53,7 @@ dotnet build src/ThaiWrap.BepInEx -c Release   # plugin — ต้อง 0 warni
 | `tests/ThaiWrap.Tests/` | invariant + ชุดประโยคเกม — 152 checks หลังพอร์ตไม้ยมก (console runner) |
 | `data/words_th.txt` | พจนานุกรม (65,758 คำ ณ v0.9.0) |
 | `nobreak.txt` · `words_extra.txt` | วลีห้ามตัด · คำเฉพาะเกม — ไฟล์ของผู้ใช้ วางข้าง word list (ไม่อยู่ใน repo) |
-| `web/` | หน้าทดสอบ visual — `thaiwrap.js` เป็น **JS port ของ core** ณ v0.4.0 (ยังไม่มี normalize/โหมด space/words_extra/nobreak/yamok-nbsp · ไม่มีเทสใน CI) |
+| `web/` | หน้าทดสอบ visual — `thaiwrap.js` เป็น **JS port ของ core** ตรงกับ C# ณ v0.9.0 ทุกตัวเลือกตัดคำ (ไม่รวม `--stats`/ร↔ล/mispaste) · ตรวจ parity ใน CI ด้วย `tools/js-parity.sh` · push `web/**` = deploy GitHub Pages อัตโนมัติ |
 | `tools/` | `fetch-bepinex.sh` (refs สำหรับ build plugin) · `package-plugin.sh` (zip ปล่อยเวอร์ชัน) · patch ฟอนต์ · ทดสอบ Godot |
 | `publish/` | binary single-file ของ CLI ต่อ RID (commit ไว้ใน repo) |
 | `docs/COMPATIBILITY.md` | ความเข้ากันได้เอนจิน/ฟอนต์ (ZWSP vs hairspace · NBSP สำหรับวลีห้ามตัด) |
@@ -62,8 +63,9 @@ dotnet build src/ThaiWrap.BepInEx -c Release   # plugin — ต้อง 0 warni
 1. **Port parity** — `ThaiSegmenter.cs` port จาก `ThaiW3Setup/core/thai_wrap.py` (MIT)
    เมื่อแก้ segmentation: หรือ sync สองฝั่งให้ตรงกัน หรือระบุในคอมเมนต์/เทสว่าเหตุใด
    แตกต่าง · มาตรฐานเทียบ output 41/42 ประโยค (วัดตอน port · ต่างเฉพาะเคส placeholder
-   ที่ตั้งใจปกป้อง) · แก้ core แล้วต้องดู `web/thaiwrap.js` ด้วย — ตอนนี้ตามหลัง C# อยู่
-   (ดูตารางโครงสร้าง) ถ้าไม่ sync ให้ระบุในคอมมิตว่าฟีเจอร์ไหนยังไม่มีฝั่งเว็บ
+   ที่ตั้งใจปกป้อง) · แก้ core แล้วต้องแก้ `web/thaiwrap.js` ตามด้วย — `tools/js-parity.sh`
+   (CI) เทียบผล JS กับ CLI จริงหลายชุดตัวเลือก จะ fail ถ้าไม่ตาม · ตัวเลือกใหม่ต้องเพิ่มใน
+   `tools/js-parity.js` + ชุดใน `.sh` และเคสใน `tests/samples/parity.txt` ด้วย
 2. **พจนานุกรม** = union ของ pythainlp (Apache-2.0) + ICU thaidict (Unicode License) —
    เครดิตอยู่ใน `LICENSE`/`NOTICE` ต้องรักษาไว้ตรงจริงทุกครั้งที่แก้ `data/words_th.txt`
    · ห้ามใส่ชื่อเฉพาะจากเกม/โปรเจกต์ใดเข้า dict กลาง — ผู้ใช้เพิ่มเองผ่านไฟล์

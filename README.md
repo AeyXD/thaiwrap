@@ -219,7 +219,10 @@ Options หลัก: `-f auto|text|csv|tsv|json|po|keyvalue` · `--columns "1,3
 
 หรือรัน local: `cd web && python3 -m http.server 8741` แล้วเปิด `http://127.0.0.1:8741/`
 — แผงซ้าย = ข้อความไทยในเอนจินที่ตัดที่ช่องว่างเท่านั้น (ตัวสีแดง = โดนตัดกลางคำ)
-แผงขวา = ข้อความเดียวกันหลังผ่าน thaiwrap
+แผงขวา = ข้อความเดียวกันหลังผ่าน thaiwrap · เลือกเอนจินได้ (ZWSP / hair space สำหรับ Scaleform /
+ช่องว่างจริงสำหรับ Aurora) และลองตัวเลือกเดียวกับ CLI ได้ครบ: `--normalize` · `--yamok-nbsp` ·
+วลีห้ามตัด (`nobreak.txt`) · คำเฉพาะเกม (`words_extra.txt`) — ผลตรงกับ CLI ทุกบรรทัด
+(CI ตรวจด้วย `tools/js-parity.sh`)
 
 ## สถานะ
 
