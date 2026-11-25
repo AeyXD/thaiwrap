@@ -392,6 +392,51 @@ namespace ThaiWrap.Tests
             Check("ral: คำที่ถูกอยู่แล้วไม่เสนอ (null)", seg.SuggestRalSwap("บุกรุก") == null && seg.SuggestRalSwap("กระบี่") == null);
             Check("ral: คำสั้น/ไม่มี ร ล ไม่เสนอ", seg.SuggestRalSwap("กก") == null && seg.SuggestRalSwap("เดินไป") == null);
 
+            Console.WriteLine("== ตัวตรวจคำผิดตามบริบท (พอร์ต find_ral_swaps / find_wrong_word ของ W3) ==");
+            {
+                var words = File.ReadAllLines(wordList);
+                Check("ctx: EnumerateWords ครบเท่า WordCount", seg.EnumerateWords().Count() == seg.WordCount);
+                var ck = new ThaiContextChecker(words);
+                string Ral(string t) => string.Join(" ", ck.CheckRal(t).Select(s => s.Wrong + ">" + s.Suggested));
+                Check("ctx ral: คำประสมที่ทุกพยางค์เป็นคำจริง (บุกลุก → บุกรุก)", Ral("ศัตรูบุกลุกเข้ามาในหมู่บ้าน") == "บุกลุก>บุกรุก", Ral("ศัตรูบุกลุกเข้ามาในหมู่บ้าน"));
+                Check("ctx ral: การ นำหน้าคำถัดไปไม่ใช่ กาล (ตลอดการเดินทาง)", Ral("ตลอดการเดินทางข้าไม่เคยหลับ") == "");
+                Check("ctx ral: การ + คำลงท้าย = กาล (ตลอดการเลย)", Ral("ข้าจะจำเจ้าไว้ตลอดการเลย") == "ตลอดการ>ตลอดกาล", Ral("ข้าจะจำเจ้าไว้ตลอดการเลย"));
+                Check("ctx ral: ...ละ ที่เป็นต้นคำถัดไป (มาละลาย) ไม่รายงาน", Ral("เอามาละลายน้ำก่อนดื่ม") == "", Ral("เอามาละลายน้ำก่อนดื่ม"));
+                Check("ctx ral: ไม่...หรอก = คำลงท้ายปฏิเสธ ไม่ใช่ หลอก", Ral("ข้าไม่ได้เผาหรอกนะ") == "", Ral("ข้าไม่ได้เผาหรอกนะ"));
+                Check("ctx ral: คู่คำที่ต้องดูบริบท (สมุนไหร → สมุนไพร · เท่าไหร → เท่าไหร่)",
+                    Ral("สมุนไหรชนิดนี้ราคาเท่าไหร") == "สมุนไหร>สมุนไพร เท่าไหร>เท่าไหร่", Ral("สมุนไหรชนิดนี้ราคาเท่าไหร"));
+                Check("ctx ral: ไหร ไม่มีบริบทกำกับ = ไม่เสนอ", Ral("ไหรกันนะ") == "", Ral("ไหรกันนะ"));
+                Check("ctx ral: คำผิดที่รู้คำแก้ (รุงแรง → รุนแรง ผ่าน HINTS)", Ral("ความรุงแรงในเมืองนี้") == "รุง>รุน", Ral("ความรุงแรงในเมืองนี้"));
+                Check("ctx ral: เครื่องหมาย/แท็กติดคำยังจับได้ (ตัดคำทีละช่วงอักษรไทย)", Ral("<b>บุกลุก!</b>") == "บุกลุก>บุกรุก", Ral("<b>บุกลุก!</b>"));
+                Check("ctx ral: ตำแหน่งอ้างอิงข้อความเดิม", ck.CheckRal("ศัตรูบุกลุก")[0].Start == 5);
+
+                var allow = CheckAllow.Parse(new[] { "# ชื่อเฉพาะ", "บุกลุก", "ข้า[ไม่]ได้", "ตลอดการ>ตลอดกาล" });
+                var cka = new ThaiContextChecker(words, allow);
+                Check("ctx allow: รูปเดี่ยว / คู่ / นับรายการ (ข้าม #)",
+                    cka.CheckRal("ศัตรูบุกลุกเข้ามา").Count == 0 && cka.CheckRal("จำไว้ตลอดการเลย").Count == 0 && allow.Count == 3);
+                Check("ctx allow: วลี — ถูกเฉพาะในวลีที่ระบุ", allow.AllowsAt("ไม่", "ข้าไม่ได้ทำ", 3) && !allow.AllowsAt("ไม่", "เขาไม่ได้ทำ", 3));
+
+                // สะกดถูกแต่ผิดบริบท: คลังมี พรุ่งนี้|ข้า|จะ 5 ครั้ง (แน่นอน) แต่ พรุ่งนี้|ขา|จะ ครั้งเดียว (typo)
+                // (เลี่ยง เข้าไป — เป็นคำเดียวในพจนานุกรม จึงไม่เกิดคู่ เดิน|เข้า ให้นับ)
+                var ckw = new ThaiContextChecker(words);
+                for (int k = 0; k < 5; k++) ckw.AddCorpus("พรุ่งนี้ข้าจะกลับมา");
+                ckw.AddCorpus("พรุ่งนี้ขาจะกลับมา");
+                var ww = ckw.CheckWrongWord("พรุ่งนี้ขาจะกลับมา");
+                Check("ctx word: ขา → ข้า เมื่อคลังยืนยันบริบท (≥5) และคำเดิมแทบไม่เคยอยู่ (≤1)",
+                    ww.Count == 1 && ww[0].Wrong == "ขา" && ww[0].Suggested == "ข้า" && ww[0].Kind == SuggestionKind.WrongWord,
+                    string.Join(" ", ww.Select(s => s.Wrong + ">" + s.Suggested)));
+                Check("ctx word: ประโยคปกติในคลังไม่ถูกรายงาน", ckw.CheckWrongWord("พรุ่งนี้ข้าจะกลับมา").Count == 0);
+                var ckFew = new ThaiContextChecker(words);
+                for (int k = 0; k < 4; k++) ckFew.AddCorpus("พรุ่งนี้ข้าจะกลับมา");
+                Check("ctx word: หลักฐานไม่พอ (4 < 5) = ไม่เสนอ", ckFew.CheckWrongWord("พรุ่งนี้ขาจะกลับมา").Count == 0);
+                var ckPair = new ThaiContextChecker(words, CheckAllow.Parse(new[] { "ขา>ข้า" }));
+                for (int k = 0; k < 5; k++) ckPair.AddCorpus("พรุ่งนี้ข้าจะกลับมา");
+                Check("ctx word: คู่ใน check_allow ไม่ถูกเสนอ", ckPair.CheckWrongWord("พรุ่งนี้ขาจะกลับมา").Count == 0);
+                var ckNa = new ThaiContextChecker(words);
+                for (int k = 0; k < 5; k++) ckNa.AddCorpus("ไปกันเถอะนะเพื่อน");
+                Check("ctx word: คำลงท้ายที่ใช้ได้ทั้งสองรูป (น่ะ/นะ) ไม่ถูกเสนอ", ckNa.CheckWrongWord("ไปกันเถอะน่ะเพื่อน").Count == 0);
+            }
+
             Console.WriteLine("== formats: csv ==");
             string csv = File.ReadAllText("tests/samples/items.csv", Encoding.UTF8);
             var table0 = CsvProcessor.ParseTable(csv, ',');

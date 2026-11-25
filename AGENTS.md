@@ -44,15 +44,16 @@ dotnet build src/ThaiWrap.BepInEx -c Release   # plugin — ต้อง 0 warni
 
 | ที่อยู่ | หน้าที่ |
 |---|---|
-| `src/ThaiWrap/ThaiSegmenter.cs` | หัวใจ: DP optimal segmentation + trie + กฎพยัญชนะทวิภาค + วลีห้ามตัด (nobreak) + รวม `words_extra` + เสนอ ร↔ล (`SuggestRalSwap`) |
+| `src/ThaiWrap/ThaiSegmenter.cs` | หัวใจ: DP optimal segmentation + trie + กฎพยัญชนะทวิภาค + วลีห้ามตัด (nobreak) + รวม `words_extra` |
+| `src/ThaiWrap/ThaiContextChecker.cs` | ตัวตรวจคำผิดตามบริบทใน `--stats` (ร↔ล + สะกดถูกแต่ผิดบริบท) — พอร์ต find_ral_swaps / find_wrong_word ของ W3 ผลตรง Python ทุกจุดบนคลัง W3 · ข้อยกเว้นเฉพาะเกมอยู่ใน `check_allow.txt` ของโปรเจกต์ ไม่ใส่ในโค้ด |
 | `src/ThaiWrap/ThaiNormalizer.cs` | `--normalize` ยุบรูปพิมพ์ผิด (เเ→แ, มาร์คซ้อน/ลำดับผิด) |
 | `src/ThaiWrap/ThaiChunker.cs` | รวมคำเป็นกลุ่มวลีสำหรับโหมด space (พอร์ตจาก ThaiW1Setup) |
 | `src/ThaiWrap.Formats/` | parser csv/tsv/json/po/keyvalue — อนุรักษ์เดิม · `MispasteDetector` (--mispaste) |
 | `src/ThaiWrap.Cli/` | CLI + options |
 | `src/ThaiWrap.BepInEx/` | plugin hook TMP/UGUI ตอนเกมรัน (net35) · แผนทดสอบ `docs/PLUGIN-TEST-PLAN.md` |
-| `tests/ThaiWrap.Tests/` | invariant + ชุดประโยคเกม — 152 checks หลังพอร์ตไม้ยมก (console runner) |
+| `tests/ThaiWrap.Tests/` | invariant + ชุดประโยคเกม — 170 checks หลังพอร์ตตัวตรวจคำผิดตามบริบท (console runner) |
 | `data/words_th.txt` | พจนานุกรม (65,758 คำ ณ v0.9.0) |
-| `nobreak.txt` · `words_extra.txt` | วลีห้ามตัด · คำเฉพาะเกม — ไฟล์ของผู้ใช้ วางข้าง word list (ไม่อยู่ใน repo) |
+| `nobreak.txt` · `words_extra.txt` · `check_allow.txt` | วลีห้ามตัด · คำเฉพาะเกม · ข้อยกเว้นตัวตรวจคำผิด — ไฟล์ของผู้ใช้ วางข้าง word list (ไม่อยู่ใน repo) |
 | `web/` | หน้าทดสอบ visual — `thaiwrap.js` เป็น **JS port ของ core** ตรงกับ C# ณ v0.9.0 ทุกตัวเลือกตัดคำ (ไม่รวม `--stats`/ร↔ล/mispaste) · ตรวจ parity ใน CI ด้วย `tools/js-parity.sh` · push `web/**` = deploy GitHub Pages อัตโนมัติ |
 | `tools/` | `publish.sh` (rebuild `publish/` 3 RID · `--zip` = zip CLI ไว้แนบ Release) · `package-plugin.sh` (zip plugin) · `fetch-bepinex.sh` (refs สำหรับ build plugin) · `js-parity.sh` · patch ฟอนต์ · ทดสอบ Godot |
 | `publish/` | binary single-file ของ CLI ต่อ RID (commit ไว้ใน repo) |

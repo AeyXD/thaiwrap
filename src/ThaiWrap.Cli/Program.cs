@@ -16,6 +16,8 @@ namespace ThaiWrap.Cli
             public string? OutputPath;
             public string WordList = "data/words_th.txt";
             public bool WordsExplicit;
+            public List<string>? CheckWords;      // word list ที่ใช้ตัดคำ (รวม words_extra) — สำหรับตัวตรวจคำผิด (--stats)
+            public CheckAllow? CheckAllow;         // check_allow.txt ของโปรเจกต์ (ถ้ามี)
             public string Mode = "zwsp"; // zwsp | sep
             public string Format = "auto";
             public string? Columns;
@@ -41,7 +43,7 @@ namespace ThaiWrap.Cli
             public ThaiTextIssues Issues = new ThaiTextIssues(); // รูปพิมพ์ผิดที่พบในอินพุต (นับเมื่อ --stats)
             public Dictionary<string, int> UnknownCounts = new Dictionary<string, int>(); // คำนอกพจนานุกรม (เมื่อ --stats)
             public int CheckDirty; // ไฟล์ที่ยังมีข้อความไทยไม่ถูกแตรป (เมื่อ --check)
-            public Dictionary<string, int> RalSuggestions = new Dictionary<string, int>(); // ข้อเสนอ ร↔ล (เมื่อ --stats)
+            public List<KeyValuePair<string, string>> Docs = new List<KeyValuePair<string, string>>(); // (ไฟล์, อินพุต) สำหรับตัวตรวจคำผิด (เมื่อ --stats)
         }
 
         public static int Main(string[] args)
@@ -104,12 +106,20 @@ namespace ThaiWrap.Cli
             {
                 var merge = ThaiSegmenter.MergeWordFiles(cfg.WordList, extraPath);
                 segmenter = new ThaiSegmenter(merge.Words, cfg.Options);
+                cfg.CheckWords = merge.Words;
                 Console.Error.WriteLine("คำเฉพาะโปรเจกต์: " + extraPath + " (+" + merge.Added + " −" + merge.Removed +
                     ") — dict รวม " + segmenter.WordCount + " คำ");
             }
             else
             {
                 segmenter = ThaiSegmenter.FromFile(cfg.WordList, cfg.Options);
+                cfg.CheckWords = new List<string>(File.ReadAllLines(cfg.WordList));
+            }
+            string? allowPath = cfg.Stats ? FindDataFile("check_allow.txt", cfg.WordList) : null;
+            if (allowPath != null)
+            {
+                cfg.CheckAllow = CheckAllow.Load(allowPath);
+                Console.Error.WriteLine("ข้อยกเว้นตัวตรวจคำผิด: " + allowPath + " (" + cfg.CheckAllow.Count + " รายการ)");
             }
             Func<string, string> transform = cfg.Mode == "sep"
                 ? (Func<string, string>)(s => segmenter.SegmentToString(s))
@@ -134,7 +144,7 @@ namespace ThaiWrap.Cli
                 var totals = new Totals();
                 int rc = RunFile(cfg, cfg.InputPath, cfg.OutputPath, transform, segmenter, totals);
                 if (cfg.Stats) PrintTopUnknowns(totals.UnknownCounts, "คำนอกพจนานุกรมที่พบบ่อยในไฟล์นี้", 10);
-                if (cfg.Stats) PrintTopSuggestions(totals.RalSuggestions, "คำที่น่าจะพิมพ์สลับ ร↔ล (ข้อเสนอ — ตรวจบริบทก่อนแก้)", 8);
+                if (cfg.Stats) PrintContextSuggestions(cfg, totals, 15);
                 if (cfg.Check)
                 {
                     if (totals.CheckDirty > 0) return 1;
@@ -338,7 +348,7 @@ namespace ThaiWrap.Cli
                     Console.Error.WriteLine($"ต้องตรวจด้วยตา (กำกวม): สระ/วรรณยุกต์ต่างตัวซ้อน {t.MixedVowels + t.MixedTones} จุด · สระหน้า+มาร์ค {t.LeadingVowelMark} จุด");
             }
             if (cfg.Stats) PrintTopUnknowns(totals.UnknownCounts, "คำนอกพจนานุกรมที่พบบ่อย (พิจารณาเพิ่มใน words_extra.txt)", 20);
-            if (cfg.Stats) PrintTopSuggestions(totals.RalSuggestions, "คำที่น่าจะพิมพ์สลับ ร↔ล (ข้อเสนอ — ตรวจบริบทก่อนแก้)", 15);
+            if (cfg.Stats) PrintContextSuggestions(cfg, totals, 30);
             if (cfg.Check)
             {
                 if (totals.CheckDirty > 0)
@@ -426,7 +436,7 @@ namespace ThaiWrap.Cli
                 // นับจากอินพุตดิบทั้งไฟล์ — ค่าประมาณ (ไม่รู้เรื่อง mask/คอลัมน์ที่เลือก) แต่พอใช้เตือน
                 var issues = ThaiNormalizer.Count(input);
                 CollectUnknowns(segmenter, input, totals.UnknownCounts);
-                CollectRalSuggestions(segmenter, input, totals.RalSuggestions);
+                totals.Docs.Add(new KeyValuePair<string, string>(path, input));
                 totals.Issues.DoubleE += issues.DoubleE;
                 totals.Issues.DoubledMark += issues.DoubledMark;
                 totals.Issues.MarkOrder += issues.MarkOrder;
@@ -515,46 +525,59 @@ namespace ThaiWrap.Cli
         }
 
         /// <summary>
-        /// เสนอคำแก้การสลับ ร↔ล — รวม token ไทยติดกัน 1–3 ตัวแล้วลองสลับ (พอร์ต pass 1–2 ของ
-        /// find_ral_swaps.py ของ W3): การพิมพ์ผิดแบบ "บุกลุก" ตัดออกมาเป็นคำจริงสองคำ จึงต้องรวมก่อนเช็ค
+        /// ข้อเสนอแก้คำจาก ThaiContextChecker (พอร์ต find_ral_swaps / find_wrong_word ของ W3) — ทุกไฟล์รวมเป็น
+        /// คลังเดียวก่อน เพราะตัวตรวจ "สะกดถูกแต่ผิดบริบท" ใช้สถิติคู่คำของทั้งคลัง · แสดงรูปละบรรทัด
+        /// พร้อมจำนวนครั้งและตำแหน่งแรกที่พบ (ไฟล์:บรรทัด + บริบท) ให้ไปตรวจต้นทาง — ไม่แก้อัตโนมัติ
         /// </summary>
-        private static void CollectRalSuggestions(ThaiSegmenter segmenter, string input, Dictionary<string, int> into)
+        private static void PrintContextSuggestions(Config cfg, Totals totals, int top)
         {
-            var tokens = segmenter.Tokenize(input);
-            for (int i = 0; i < tokens.Count; i++)
+            if (cfg.CheckWords == null || totals.Docs.Count == 0) return;
+            var checker = new ThaiContextChecker(cfg.CheckWords, cfg.CheckAllow);
+            foreach (var doc in totals.Docs) checker.AddCorpus(doc.Value);
+
+            var groups = new Dictionary<string, SuggestionGroup>();
+            foreach (var doc in totals.Docs)
             {
-                if (!IsThaiToken(tokens[i])) continue;
-                var sb = new StringBuilder();
-                for (int span = 0; span < 3 && i + span < tokens.Count; span++)
+                foreach (var s in checker.CheckRal(doc.Value).Concat(checker.CheckWrongWord(doc.Value)))
                 {
-                    if (!IsThaiToken(tokens[i + span])) break;
-                    sb.Append(tokens[i + span].Text);
-                    if (span == 0 && sb.Length < 3) continue; // token เดี่ยวต้องยาวพอ
-                    string? sug = segmenter.SuggestRalSwap(sb.ToString());
-                    if (sug != null)
-                    {
-                        string key = sb + " → " + sug;
-                        into.TryGetValue(key, out int n);
-                        into[key] = n + 1;
-                    }
+                    string key = (int)s.Kind + "\u0001" + s.Wrong + "\u0001" + s.Suggested;
+                    if (!groups.TryGetValue(key, out var g))
+                        groups[key] = g = new SuggestionGroup { First = s, Path = doc.Key, Text = doc.Value };
+                    g.Count++;
                 }
             }
+            PrintSuggestionKind(groups.Values, SuggestionKind.RalSwap, "คำที่น่าจะพิมพ์สลับ ร↔ล / สะกดผิด", top);
+            PrintSuggestionKind(groups.Values, SuggestionKind.WrongWord,
+                "คำที่สะกดถูกแต่น่าจะผิดบริบท (" + totals.Docs.Count + " ไฟล์เป็นคลังสถิติ — ยิ่งคลังใหญ่ยิ่งแม่น)", top);
         }
 
-        private static bool IsThaiToken(Token t) =>
-            t.Kind == TokenKind.DictionaryWord || t.Kind == TokenKind.UnknownRun || t.Kind == TokenKind.Cluster;
-
-        private static void PrintTopSuggestions(Dictionary<string, int> counts, string label, int top)
+        private sealed class SuggestionGroup
         {
-            var list = counts.Where(kv => kv.Value >= 2)
-                .OrderByDescending(kv => kv.Value)
-                .ThenBy(kv => kv.Key, StringComparer.Ordinal)
-                .Take(top)
+            public Suggestion First = null!;
+            public string Path = "", Text = "";
+            public int Count;
+        }
+
+        private static void PrintSuggestionKind(IEnumerable<SuggestionGroup> all, SuggestionKind kind, string label, int top)
+        {
+            var list = all.Where(g => g.First.Kind == kind)
+                .OrderByDescending(g => g.Count)
+                .ThenBy(g => g.First.Wrong, StringComparer.Ordinal)
                 .ToList();
             if (list.Count == 0) return;
-            Console.Error.WriteLine(label + ":");
-            foreach (var kv in list)
-                Console.Error.WriteLine("  " + kv.Key + " ×" + kv.Value);
+            Console.Error.WriteLine(label + " — ข้อเสนอ ตรวจบริบทก่อนแก้ทุกข้อ (" + list.Count + " รูป):");
+            foreach (var g in list.Take(top))
+            {
+                var s = g.First;
+                int line = 1;
+                for (int i = 0; i < s.Start; i++) if (g.Text[i] == '\n') line++;
+                int from = Math.Max(0, s.Start - 20), to = Math.Min(g.Text.Length, s.End + 20);
+                string ctx = g.Text.Substring(from, to - from).Replace('\n', ' ').Replace('\r', ' ');
+                Console.Error.WriteLine("  " + s.Wrong + " → " + s.Suggested + " ×" + g.Count +
+                    "   " + Path.GetFileName(g.Path) + ":" + line + "  …" + ctx + "…");
+            }
+            if (list.Count > top)
+                Console.Error.WriteLine("  (อีก " + (list.Count - top) + " รูป — ใส่รูปที่ตรวจแล้วว่าถูกใน check_allow.txt เพื่อไม่ให้ขึ้นซ้ำ)");
         }
 
         // ---------- format dispatch ----------

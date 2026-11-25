@@ -126,6 +126,21 @@ namespace ThaiWrap
         public ThaiWrapOptions Options => _options;
         public int WordCount => _wordCount;
 
+        /// <summary>ทุกคำในพจนานุกรมที่โหลดแล้ว (รวม words_extra.txt หลังกรอง) — ใช้สร้างชุดคำสับสนของ ThaiContextChecker</summary>
+        public IEnumerable<string> EnumerateWords()
+        {
+            var stack = new Stack<KeyValuePair<string, TrieNode>>();
+            stack.Push(new KeyValuePair<string, TrieNode>("", _root));
+            while (stack.Count > 0)
+            {
+                var top = stack.Pop();
+                if (top.Value.End) yield return top.Key;
+                if (top.Value.Children == null) continue;
+                foreach (var kv in top.Value.Children)
+                    stack.Push(new KeyValuePair<string, TrieNode>(top.Key + kv.Key, kv.Value));
+            }
+        }
+
         /// <summary>คำนี้อยู่ในพจนานุกรม (รวม words_extra.txt) หรือไม่ — ใช้กับการตรวจ/เสนอการสะกด</summary>
         public bool IsKnownWord(string word)
         {
