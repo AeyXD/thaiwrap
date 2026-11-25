@@ -54,7 +54,7 @@ dotnet build src/ThaiWrap.BepInEx -c Release   # plugin — ต้อง 0 warni
 | `data/words_th.txt` | พจนานุกรม (65,758 คำ ณ v0.9.0) |
 | `nobreak.txt` · `words_extra.txt` | วลีห้ามตัด · คำเฉพาะเกม — ไฟล์ของผู้ใช้ วางข้าง word list (ไม่อยู่ใน repo) |
 | `web/` | หน้าทดสอบ visual — `thaiwrap.js` เป็น **JS port ของ core** ตรงกับ C# ณ v0.9.0 ทุกตัวเลือกตัดคำ (ไม่รวม `--stats`/ร↔ล/mispaste) · ตรวจ parity ใน CI ด้วย `tools/js-parity.sh` · push `web/**` = deploy GitHub Pages อัตโนมัติ |
-| `tools/` | `fetch-bepinex.sh` (refs สำหรับ build plugin) · `package-plugin.sh` (zip ปล่อยเวอร์ชัน) · patch ฟอนต์ · ทดสอบ Godot |
+| `tools/` | `publish.sh` (rebuild `publish/` 3 RID · `--zip` = zip CLI ไว้แนบ Release) · `package-plugin.sh` (zip plugin) · `fetch-bepinex.sh` (refs สำหรับ build plugin) · `js-parity.sh` · patch ฟอนต์ · ทดสอบ Godot |
 | `publish/` | binary single-file ของ CLI ต่อ RID (commit ไว้ใน repo) |
 | `docs/COMPATIBILITY.md` | ความเข้ากันได้เอนจิน/ฟอนต์ (ZWSP vs hairspace · NBSP สำหรับวลีห้ามตัด) |
 
@@ -79,9 +79,9 @@ dotnet build src/ThaiWrap.BepInEx -c Release   # plugin — ต้อง 0 warni
    ทำให้คำกลายเป็น unknown แล้ว merge pass เกาะกินคำข้าง ๆ (จุดตัดเพี้ยนทั้งย่อหน้า)
    เมื่อทำฟีเจอร์ normalize/พบปัญหา segmentation ให้นึกถึงตระกูลนี้ก่อนเตะอัลกอริทึม
 4. **ไฟล์ binary ใน `publish/`** ถูก commit ไว้ — เจอ modified อย่า `git add .`
-   ให้ดูทีละไฟล์ว่าตั้งใจ · rebuild เฉพาะตอนออกเวอร์ชัน (commit `vX.Y.Z`) ทั้ง 3 RID
-   (`linux-x64` `osx-arm64` `win-x64`) ด้วย `dotnet publish src/ThaiWrap.Cli -c Release -r <RID>`
-   (csproj ตั้ง single-file และคัด `data/words_th.txt` ไปที่ `data/` ให้เองแล้ว)
+   ให้ดูทีละไฟล์ว่าตั้งใจ · rebuild เฉพาะตอนออกเวอร์ชัน (commit `vX.Y.Z`) ด้วย
+   `./tools/publish.sh` (ทั้ง 3 RID `linux-x64` `osx-arm64` `win-x64` + รัน binary ของเครื่องนี้จริง)
+   · build ไม่ deterministic — source เดิมก็ได้ไบต์ต่าง ถ้าไม่ได้ออกเวอร์ชันให้ `git checkout -- publish/`
 5. Scaleform/Flash (เช่น Witcher 3) ไม่นับ ZWSP เป็นจุดตัด — ใช้ hairspace
    และฟอนต์ต้องมี glyph ว่างที่ U+200A (ดู `docs/COMPATIBILITY.md`) · ช่องว่างจริงหน้า ๆ
    ("ต่าง ๆ") ยังเป็นจุดตัด → ต้องเป็น NBSP (`--yamok-nbsp` / plugin `YamokNbsp` · opt-in)
@@ -104,8 +104,8 @@ dotnet build src/ThaiWrap.BepInEx -c Release   # plugin — ต้อง 0 warni
   และแก้วันที่ "อัปเดต" หัวไฟล์ให้ตรง) — เขียนผ่าน symlink แล้ว commit+push ที่ repo รวม
   ตามเช็กลิสต์ท้าย GUIDE
 - **ออกเวอร์ชัน `vX.Y.Z`** (แนวทางจาก v0.8.0): bump `PluginVersion` ใน `ThaiWrapPlugin.cs`
-  ให้ตรงแท็ก → เทสผ่าน → rebuild `publish/` ทั้ง 3 RID → commit "vX.Y.Z: …" → แท็ก +
-  GitHub Release ภาษาไทย พร้อม zip CLI 3 แพลตฟอร์ม + `ThaiWrap-BepInEx.zip`
-  (สร้างด้วย `./tools/package-plugin.sh`) → release notes ต้องระบุสถานะ plugin ตรงๆ
+  ให้ตรงแท็ก → เทสผ่าน → `./tools/publish.sh --zip` → commit "vX.Y.Z: …" (เฉพาะไฟล์ใน
+  `publish/`) → `./tools/package-plugin.sh` → แท็ก + GitHub Release ภาษาไทย แนบ `dist/` 4 ไฟล์
+  (`thaiwrap-cli-<rid>.zip` ×3 + `ThaiWrap-BepInEx.zip`) → release notes ต้องระบุสถานะ plugin ตรงๆ
   (ตอนนี้คือ "ยังไม่ได้ทดสอบในเกมจริง" จนกว่าแผน `docs/PLUGIN-TEST-PLAN.md` จะผ่าน)
 - ตัวเลขในเอกสาร (จำนวนคำ/จำนวนเทส) ให้ระบุว่าวัด ณ เวอร์ชันไหน — ค่าจริงดูจากคำสั่ง ไม่ใช่จากเอกสาร
