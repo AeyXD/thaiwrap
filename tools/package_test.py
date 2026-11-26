@@ -6,8 +6,8 @@
 ตรวจ:
  1. --help ออก exit 0
  2. json: ประมวลผลได้ + parser อิสระ (json.load) ยืนยันโครงสร้าง/ค่า + ZWSP อยู่ใน field เป้าหมาย
- 3. CP874 ไม่มี BOM: exit 2 + ไม่เขียน output (ไม่ยอมแทนอักขระเงียบๆ)
- 4. csv: record ว่างท้ายไฟล์ ("") ไม่หาย ไปกลับครบ
+ 3. CP874 ไม่มี BOM: exit 2 + ไม่เขียน output (ไม่ยอมแทนอักขระเงียบๆ) · มี BOM แต่ข้อมูลเสีย (UTF-8/UTF-16) ก็เช่นกัน
+ 4. csv: record ว่างท้ายไฟล์ ("") ไม่หาย ไปกลับครบ · field ที่ไม่แตะคง quote เดิม + --check ไม่ฟ้องผิด
  5. hairspace: แทรก U+200A ไม่ปน ZWSP + สถิติรายงาน hairspace+N
  6. --inplace สองรอบ: .bak เก็บต้นฉบับไว้ + รอบสองข้ามไฟล์
 """
@@ -72,6 +72,14 @@ def main() -> int:
         r = run(binary, bad, "-o", badout, cwd=work)
         check("CP874: exit 2 + ข้อความบอกทางแก้", r.returncode == 2 and "UTF-8" in r.stderr)
         check("CP874: ไม่เขียน output ของเสีย", not badout.exists())
+        for name, raw in (("UTF-8 BOM", b"\xef\xbb\xbfabc\xff"), ("UTF-16 LE BOM", b"\xff\xfeA\x00\x01")):
+            bad = work / "badbom.txt"
+            bad.write_bytes(raw)
+            badout = work / "badbom.out"
+            r = run(binary, bad, "-o", badout, cwd=work)
+            check(f"{name} + ข้อมูลเสีย: exit 2 + ไม่เขียน output", r.returncode == 2 and not badout.exists(),
+                  f"exit={r.returncode}")
+            bad.unlink()
 
         # 4. csv record ว่างท้ายไฟล์
         csv_in = work / "t.csv"
@@ -80,6 +88,12 @@ def main() -> int:
         run(binary, csv_in, "--columns", "thai", "-o", csv_out, cwd=work)
         check("csv: record ว่างท้ายไฟล์ไม่หาย", csv_out.read_bytes() == "thai\r\n\"\"".encode("utf-8"),
               repr(csv_out.read_bytes()))
+        quoted = b'id,thai\n"001","Hello"\n'
+        csv_in.write_bytes(quoted)
+        run(binary, csv_in, "--columns", "thai", "-o", csv_out, cwd=work)
+        check("csv: field ที่ไม่แตะคง quote เดิม", csv_out.read_bytes() == quoted, repr(csv_out.read_bytes()))
+        r = run(binary, csv_in, "--columns", "thai", "--check", cwd=work)
+        check("csv: --check ไม่ฟ้องไฟล์ที่ไม่มีไทย", r.returncode == 0, f"exit={r.returncode}")
 
         # 5. hairspace + สถิติ
         txt = work / "hs.txt"

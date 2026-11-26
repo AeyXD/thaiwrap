@@ -577,6 +577,44 @@ namespace ThaiWrap.Tests
             Check("encoding: UTF-8 ไม่มี BOM อ่านได้ปกติ", plain.Text == "ทดสอบ abc" && plain.Enc.GetPreamble().Length == 0);
             var utf16 = TextFileEncoding.Decode(new byte[] { 0xFF, 0xFE }.Concat(Encoding.Unicode.GetBytes("ทดสอบ")).ToArray());
             Check("encoding: UTF-16 LE BOM อ่านได้", utf16.Text == "ทดสอบ");
+            // #5 (ตรวจ 2026-11-26): มี BOM แต่ข้อมูลเสีย เดิมถูกแทน U+FFFD เงียบๆ แล้ว exit 0 → ต้องปฏิเสธ
+            foreach (var bad in new (string Name, byte[] Bytes)[]
+            {
+                ("UTF-8 BOM + byte FF", new byte[] { 0xEF, 0xBB, 0xBF, 0x61, 0x62, 0x63, 0xFF }),
+                ("UTF-16 LE BOM + byte ค้างท้าย", new byte[] { 0xFF, 0xFE, 0x41, 0x00, 0x01 }),
+                ("UTF-16 BE BOM + byte ค้างท้าย", new byte[] { 0xFE, 0xFF, 0x00, 0x41, 0x01 }),
+                ("UTF-16 LE BOM + surrogate เดี่ยว", new byte[] { 0xFF, 0xFE, 0x00, 0xD8, 0x41, 0x00 }),
+                ("UTF-8 BOM + ไทยตัดครึ่ง", new byte[] { 0xEF, 0xBB, 0xBF, 0xE0, 0xB8 }),
+            })
+            {
+                string name = "encoding: " + bad.Name + " ต้องโยน IOException";
+                try { TextFileEncoding.Decode(bad.Bytes); Check(name, false); }
+                catch (IOException) { Check(name, true); }
+                catch (Exception ex) { Check(name, false, ex.GetType().Name); }
+            }
+            var utf16be = TextFileEncoding.Decode(new byte[] { 0xFE, 0xFF }.Concat(Encoding.BigEndianUnicode.GetBytes("ทดสอบ")).ToArray());
+            Check("encoding: UTF-16 BE BOM อ่านได้", utf16be.Text == "ทดสอบ");
+            Check("encoding: ไฟล์มีแค่ BOM อ่านได้เป็นว่าง",
+                TextFileEncoding.Decode(new byte[] { 0xEF, 0xBB, 0xBF }).Text == "" &&
+                TextFileEncoding.Decode(new byte[] { 0xFF, 0xFE }).Text == "");
+
+            // #6 (ตรวจ 2026-11-26): field ที่ไม่แตะต้องเป็นไบต์เดิม — เดิม "001" ถูกถอด quote และ --check ฟ้องผิด
+            var thaiCol = new CsvOptions { ColumnNames = new List<string> { "thai" } };
+            string quoted = "id,thai\n\"001\",\"Hello\"\n";
+            Check("csv: ไม่มีอะไรเปลี่ยน = ไบต์เดิมทั้งไฟล์ (quote คงอยู่)",
+                CsvProcessor.Process(quoted, thaiCol, s => seg.InsertZwsp(s)) == quoted,
+                CsvProcessor.Process(quoted, thaiCol, s => seg.InsertZwsp(s)));
+            string mixed = "\"id\",thai,note\r\n\"001\",\"สวัสดีครับท่าน\",\"a\"\"b\"\r\n002,ไปไหนมา,  x \r\n";
+            string mixedOut = CsvProcessor.Process(mixed, thaiCol, s => seg.InsertZwsp(s));
+            Check("csv: field ที่ไม่แตะคงข้อความดิบ (quote/escape/ช่องว่าง)",
+                mixedOut.StartsWith("\"id\",thai,note\r\n\"001\",") && mixedOut.Contains(",\"a\"\"b\"\r\n002,")
+                && mixedOut.EndsWith(",  x \r\n"), mixedOut);
+            Check("csv: field ที่เปลี่ยนคงสไตล์ quote เดิม",
+                mixedOut.Contains(",\"สวัสดี" ) && mixedOut.Contains(",ไป") && !mixedOut.Contains(",\"ไป"), mixedOut);
+            Check("csv: ลบ ZWSP แล้วได้ต้นฉบับทุกไบต์", mixedOut.Replace(zw.ToString(), "") == mixed);
+            string multi = "thai,en\n\"บรรทัดแรก\nบรรทัดสอง\",\"x,y\"\n\"เปิดค้าง";
+            Check("csv: identity transform = ไบต์เดิม (หลายบรรทัด/quote ค้างท้ายไฟล์)",
+                CsvProcessor.Process(multi, new CsvOptions { ColumnIndices = new List<int> { 1, 2 } }, s => s) == multi);
 
             Console.WriteLine("== segmentation coverage ==");
             var allTokens = new List<Token>();

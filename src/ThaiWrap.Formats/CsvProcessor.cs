@@ -18,7 +18,8 @@ namespace ThaiWrap.Formats
 
     /// <summary>
     /// ประมวลผลไฟล์ CSV แบบ RFC4180 — transform เฉพาะคอลัมน์ที่ระบุ
-    /// รักษาตัวจบบรรทัดของแต่ละแถวไว้เดิม (\n หรือ \r\n)
+    /// รักษาตัวจบบรรทัดของแต่ละแถวไว้เดิม (\n หรือ \r\n) และ field ที่ค่าไม่เปลี่ยนเขียนกลับเป็นข้อความดิบเดิม
+    /// ทุกไบต์ (quote เดิม เช่น "001" ไม่ถูกถอด) — escape ใหม่เฉพาะ field ที่ transform เปลี่ยนค่า
     /// </summary>
     public static class CsvProcessor
     {
@@ -26,6 +27,7 @@ namespace ThaiWrap.Formats
         {
             var records = Parse(input, options.Delimiter);
             var targets = ResolveTargetColumns(records, options);
+            foreach (var rec in records) rec.Original = new List<string>(rec.Fields);
 
             for (int r = options.ColumnNames != null ? 1 : 0; r < records.Count; r++) // มี header-based เลือกคอลัมน์ → ข้ามแถว header
             {
@@ -73,6 +75,8 @@ namespace ThaiWrap.Formats
         private sealed class Record
         {
             public List<string> Fields = new List<string>();
+            public List<string> Raw = new List<string>(); // ข้อความดิบของแต่ละ field ตามไฟล์ (คู่กับ Fields)
+            public List<string>? Original;                // ค่าก่อน transform — สร้างตอน Process
             public string Terminator = "";
             public bool Started; // เคยเห็น field นี้เริ่มขึ้นจริง (แม้จะว่างเปล่า เช่น "" ท้ายไฟล์)
         }
@@ -83,7 +87,7 @@ namespace ThaiWrap.Formats
             var rec = new Record();
             var field = new StringBuilder();
             bool inQuotes = false;
-            int i = 0, n = input.Length;
+            int i = 0, n = input.Length, start = 0;
 
             while (i < n)
             {
@@ -100,15 +104,17 @@ namespace ThaiWrap.Formats
                 if (c == '"') { inQuotes = true; rec.Started = true; i++; continue; }
                 if (c == delim)
                 {
-                    rec.Fields.Add(field.ToString()); field.Clear(); rec.Started = true; i++; continue;
+                    rec.Fields.Add(field.ToString()); field.Clear(); rec.Started = true;
+                    rec.Raw.Add(input.Substring(start, i - start)); i++; start = i; continue;
                 }
                 if (c == '\r' || c == '\n')
                 {
                     rec.Fields.Add(field.ToString()); field.Clear();
+                    rec.Raw.Add(input.Substring(start, i - start));
                     string term = c == '\r' && i + 1 < n && input[i + 1] == '\n' ? "\r\n" : (c == '\r' ? "\r" : "\n");
                     rec.Terminator = term;
                     records.Add(rec); rec = new Record();
-                    i += term.Length; continue;
+                    i += term.Length; start = i; continue;
                 }
                 field.Append(c); rec.Started = true; i++;
             }
@@ -117,6 +123,7 @@ namespace ThaiWrap.Formats
             if (rec.Started || rec.Fields.Count > 0)
             {
                 rec.Fields.Add(field.ToString());
+                rec.Raw.Add(input.Substring(start, n - start));
                 records.Add(rec);
             }
             return records;
@@ -134,9 +141,17 @@ namespace ThaiWrap.Formats
                     if (f > 0) sb.Append(delim);
                     // field ว่างเดี่ยวใน record สุดท้ายที่ไม่มี newline ปิด ต้องเขียนเป็น ""
                     // ไม่งั้น output เป็นสตริงว่าง = record หายเวลา parse กลับ (กำกวมกับ "ไม่มี record")
+                    if (r.Original != null && f < r.Raw.Count && r.Fields[f] == r.Original[f])
+                    {
+                        sb.Append(r.Raw[f]); // ค่าไม่เปลี่ยน → ข้อความดิบเดิม (อนุรักษ์ quote/รูปเดิม)
+                        continue;
+                    }
                     bool ambiguousEmpty = lastRecordNoNewline && f == r.Fields.Count - 1 &&
                                           r.Fields[f].Length == 0 && r.Fields.Count == 1;
-                    sb.Append(ambiguousEmpty ? "\"\"" : EscapeField(r.Fields[f], delim));
+                    // field เดิมครอบ quote → ค่าใหม่ครอบ quote ด้วย (คงสไตล์เดิมของไฟล์)
+                    bool wasQuoted = f < r.Raw.Count && r.Raw[f].Length > 0 && r.Raw[f][0] == '"';
+                    sb.Append(ambiguousEmpty || (wasQuoted && r.Fields[f].Length == 0) ? "\"\""
+                        : wasQuoted ? Quote(r.Fields[f]) : EscapeField(r.Fields[f], delim));
                 }
                 sb.Append(r.Terminator);
             }
@@ -146,8 +161,10 @@ namespace ThaiWrap.Formats
         private static string EscapeField(string s, char delim)
         {
             if (s.IndexOf('"') >= 0 || s.IndexOf(delim) >= 0 || s.IndexOf('\n') >= 0 || s.IndexOf('\r') >= 0)
-                return "\"" + s.Replace("\"", "\"\"") + "\"";
+                return Quote(s);
             return s;
         }
+
+        private static string Quote(string s) => "\"" + s.Replace("\"", "\"\"") + "\"";
     }
 }
