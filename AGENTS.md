@@ -60,6 +60,7 @@ dotnet build src/ThaiWrap.BepInEx -c Release   # plugin — ต้อง 0 warni
 | `web/` | หน้าทดสอบ visual — `thaiwrap.js` เป็น **JS port ของ core** ตรงกับ C# ณ v0.12.1 ทุกตัวเลือกตัดคำ (ไม่รวม `--stats`/ร↔ล/mispaste/placeholders) · ตรวจ parity ใน CI ด้วย `tools/js-parity.sh` · push `web/**` = deploy GitHub Pages อัตโนมัติ |
 | `tools/` | `publish.sh` (rebuild `publish/` 3 RID · `--zip` = zip CLI ไว้แนบ Release) · `package-plugin.sh` (zip plugin) · `fetch-bepinex.sh` (refs สำหรับ build plugin) · `js-parity.sh` · patch ฟอนต์ · ทดสอบ Godot |
 | `publish/` | binary single-file ของ CLI ต่อ RID (commit ไว้ใน repo) |
+| `docs/MANUAL-TH.md` | คู่มือผู้ใช้ฉบับเต็ม (ติดตั้ง · ตัวเลือกทุกตัว + exit code · โหมดตรวจ · สูตรตามงาน · แก้ปัญหา) — README เป็นภาพรวมที่ชี้มาที่นี่ · **เพิ่ม/เปลี่ยนตัวเลือก CLI ต้องอัปเดตตารางหัวข้อ 10 และหัวข้อที่เกี่ยว** |
 | `docs/COMPATIBILITY.md` | ความเข้ากันได้เอนจิน/ฟอนต์ (ZWSP vs hairspace · NBSP สำหรับวลีห้ามตัด) |
 
 ## ข้อห้าม / ข้อควรระวัง
