@@ -13,6 +13,7 @@
  7. --placeholders: placeholder หาย/เกิน → exit 1 + รายงานแถว · ถูกครบ → exit 0 · ไม่เขียนไฟล์ · เคสรีวิว v0.12.0 (#13–#15)
  8. --source-column/--columns เลือกคู่ต้นฉบับ–คำแปลเอง (คอลัมน์หมายเหตุอังกฤษไม่ถูกเดาเป็นต้นฉบับ) · error ชื่อคอลัมน์ = exit 2
     · --json-path /items/*/desc แปลงเฉพาะ path ที่เลือก
+ 9. --stats คู่ --dry-run / --check: มีรายงานสถิติ (เดิมเงียบ) และไม่เขียนไฟล์
 """
 import json
 import shutil
@@ -148,6 +149,16 @@ def main() -> int:
         check("json-path: แปลงเฉพาะ /items/*/desc",
               r.returncode == 0 and ZWSP in jdata["items"][0]["desc"] and ZWSP not in jdata["items"][0]["name"]
               and ZWSP not in jdata["menu.start"], f"exit={r.returncode}")
+
+        # 9. --stats ต้องรายงานแม้ใช้คู่ --dry-run/--check (เดิมเก็บสถิติหลังจุดเขียนไฟล์ จึงเงียบ)
+        st_dir = work / "st"
+        st_dir.mkdir()
+        (st_dir / "st.txt").write_text("วิทเชอร์ไปหาวิทเชอร์ เเท้จริง\nวิทเชอร์มา\n", encoding="utf-8")
+        for flag in ("--dry-run", "--check"):
+            r = run(binary, st_dir, "--stats", flag, cwd=work)
+            check(f"stats {flag}: มีรายงานคำนอกพจนานุกรม + เตือนรูปพิมพ์ผิด + ไม่เขียนไฟล์",
+                  "คำนอกพจนานุกรมที่พบบ่อย" in r.stderr and "พบรูปพิมพ์ผิด" in r.stderr
+                  and sorted(p.name for p in st_dir.iterdir()) == ["st.txt"], f"exit={r.returncode}")
 
         # 6. --inplace สองรอบ + backup (แยกโฟลเดอร์เฉพาะ กัน run ตายเพราะ cp874.txt ในโฟลเดอร์เดียวกัน)
         folder = work / "inplace"

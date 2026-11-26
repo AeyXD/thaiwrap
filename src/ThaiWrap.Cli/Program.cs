@@ -538,6 +538,7 @@ namespace ThaiWrap.Cli
             long inserted = CountBreak(output, brk) - CountBreak(input, brk);
             if (changed) { totals.ChangedFiles++; totals.ChangedLines += CountChangedLines(input, output); }
             totals.ZwspInserted += Math.Max(0, inserted);
+            if (cfg.Stats) CollectFileStats(cfg, path, input, format, changed, brk, inserted, segmenter, totals);
 
             if (cfg.Check)
             {
@@ -589,35 +590,41 @@ namespace ThaiWrap.Cli
                 Console.Out.Write(output);
             }
 
-            if (cfg.Stats)
-            {
-                // นับจากอินพุตดิบทั้งไฟล์ — ค่าประมาณ (ไม่รู้เรื่อง mask/คอลัมน์ที่เลือก) แต่พอใช้เตือน
-                var issues = ThaiNormalizer.Count(input);
-                CollectUnknowns(segmenter, input, totals.UnknownCounts);
-                totals.Checks.AddRange(BuildCheckEntries(cfg, path, input, format ?? "text"));
-                totals.CheckFiles++;
-                totals.Issues.DoubleE += issues.DoubleE;
-                totals.Issues.DoubledMark += issues.DoubledMark;
-                totals.Issues.MarkOrder += issues.MarkOrder;
-                totals.Issues.SaraAm += issues.SaraAm;
-                totals.Issues.StrayTone += issues.StrayTone;
-                totals.Issues.MixedVowels += issues.MixedVowels;
-                totals.Issues.MixedTones += issues.MixedTones;
-                totals.Issues.LeadingVowelMark += issues.LeadingVowelMark;
-
-                if (!cfg.Normalize && issues.Total > 0)
-                    Console.Error.WriteLine("คำเตือน: พบรูปพิมพ์ผิดที่กระทบการตัดคำ " + issues.Total + " จุด — รันด้วย --normalize เพื่อแก้ก่อนตัด: " + path);
-                if (issues.WarningsTotal > 0)
-                    Console.Error.WriteLine("ตรวจด้วยตา (กำกวม แก้อัตโนมัติไม่ได้): สระ/วรรณยุกต์ต่างตัวซ้อน " +
-                        (issues.MixedVowels + issues.MixedTones) + " จุด · สระหน้า+มาร์ค " + issues.LeadingVowelMark + " จุด: " + path);
-
-                Console.Error.WriteLine($"[{path}] format={format} changed={changed} {BreakName(brk)}+{inserted} dict={segmenter.WordCount}");
-                if (cfg.Normalize && issues.Total > 0)
-                    Console.Error.WriteLine("  normalize แก้ " + issues.Total + " จุด: เเ " + issues.DoubleE +
-                        " · มาร์คซ้อน " + issues.DoubledMark + " · ลำดับมาร์ค " + issues.MarkOrder +
-                        " · ํ+า→ำ " + issues.SaraAm + " · วรรณยุกต์หลังสระหน้า " + issues.StrayTone);
-            }
             return 0;
+        }
+
+        /// <summary>
+        /// --stats ของไฟล์หนึ่ง — เรียกก่อนแยกทาง --check/--dry-run/เขียนไฟล์ จึงได้รายงานครบทุกโหมด
+        /// (เดิมอยู่หลังการเขียน ทำให้ --stats --dry-run ไม่มีรายงานเลย)
+        /// </summary>
+        private static void CollectFileStats(Config cfg, string path, string input, string? format, bool changed, char brk,
+            long inserted, ThaiSegmenter segmenter, Totals totals)
+        {
+            // นับจากอินพุตดิบทั้งไฟล์ — ค่าประมาณ (ไม่รู้เรื่อง mask/คอลัมน์ที่เลือก) แต่พอใช้เตือน
+            var issues = ThaiNormalizer.Count(input);
+            CollectUnknowns(segmenter, input, totals.UnknownCounts);
+            totals.Checks.AddRange(BuildCheckEntries(cfg, path, input, format ?? "text"));
+            totals.CheckFiles++;
+            totals.Issues.DoubleE += issues.DoubleE;
+            totals.Issues.DoubledMark += issues.DoubledMark;
+            totals.Issues.MarkOrder += issues.MarkOrder;
+            totals.Issues.SaraAm += issues.SaraAm;
+            totals.Issues.StrayTone += issues.StrayTone;
+            totals.Issues.MixedVowels += issues.MixedVowels;
+            totals.Issues.MixedTones += issues.MixedTones;
+            totals.Issues.LeadingVowelMark += issues.LeadingVowelMark;
+
+            if (!cfg.Normalize && issues.Total > 0)
+                Console.Error.WriteLine("คำเตือน: พบรูปพิมพ์ผิดที่กระทบการตัดคำ " + issues.Total + " จุด — รันด้วย --normalize เพื่อแก้ก่อนตัด: " + path);
+            if (issues.WarningsTotal > 0)
+                Console.Error.WriteLine("ตรวจด้วยตา (กำกวม แก้อัตโนมัติไม่ได้): สระ/วรรณยุกต์ต่างตัวซ้อน " +
+                    (issues.MixedVowels + issues.MixedTones) + " จุด · สระหน้า+มาร์ค " + issues.LeadingVowelMark + " จุด: " + path);
+
+            Console.Error.WriteLine($"[{path}] format={format} changed={changed} {BreakName(brk)}+{inserted} dict={segmenter.WordCount}");
+            if (cfg.Normalize && issues.Total > 0)
+                Console.Error.WriteLine("  normalize แก้ " + issues.Total + " จุด: เเ " + issues.DoubleE +
+                    " · มาร์คซ้อน " + issues.DoubledMark + " · ลำดับมาร์ค " + issues.MarkOrder +
+                    " · ํ+า→ำ " + issues.SaraAm + " · วรรณยุกต์หลังสระหน้า " + issues.StrayTone);
         }
 
         /// <summary>
