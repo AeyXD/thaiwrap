@@ -25,7 +25,7 @@ ThaiWrap — ติดตั้งลงเกม Unity (BepInEx 5)
    (รองรับ TextMeshPro และ UnityEngine.UI.Text)
 
 หมายเหตุ:
-- ปรับแต่งได้ที่ BepInEx/config/BepInEx.cfg ของ thaiwrap (เปิด/ปิด, ความยาวคำ)
+- ปรับแต่งได้ที่ BepInEx/config/thaiwrap.plugin.cfg (สร้างหลังเปิดเกมครั้งแรก — เปิด/ปิด, normalize, ความยาวคำ)
 - ถ้าฟอนต์เกมไม่มี glyph ZWSP และแสดงเป็นกล่อง ให้ patch ฟอนต์ด้วย
   tools/font_zwsp_patch.py จาก repo ก่อน
 - ยังไม่รองรับเกม IL2CPP (BepInEx 6) ในเวอร์ชันนี้

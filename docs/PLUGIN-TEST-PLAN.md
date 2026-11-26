@@ -3,16 +3,33 @@
 สถานะ: **ยังไม่ได้ทดสอบ** — เอกสารนี้เตรียมไว้ล่วงหน้าเพื่อรันครั้งแรกให้ครบชุดและเก็บผลเป็นหลักฐาน
 (อ้างใน Release notes ว่า "ยังไม่ได้ทดสอบในเกมจริง" — เมื่อตารางผลด้านล่างผ่าน จะถูกแทนที่)
 
-เป้าหมาย: พิสูจน์ว่า `ThaiWrap.BepInEx.dll` (v0.8.0) ติดตั้งบนเกม Unity **Mono** จริงแล้ว
+เป้าหมาย: พิสูจน์ว่า `ThaiWrap.BepInEx.dll` (v0.12.0) ติดตั้งบนเกม Unity **Mono** จริงแล้ว
 โหลดได้ · hook ข้อความได้ · ตัดบรรทัดไทยถูกจุด · ไม่พังอะไรตามมา
+
+## เครื่องและเกมที่เลือก (ผู้ใช้เลือก 2026-11-26)
+
+- **เครื่อง: Windows PC** — Mac Apple Silicon ใช้ไม่ได้ตรง ๆ: Harmony/MonoMod ใน BepInEx 5 ไม่รองรับ Mono แบบ arm64
+  (doorstop โหลดได้แต่ plugin ไม่ถูกโหลด — [รายงาน](https://sbrothers7.github.io/docs/macOS/ADOFAI%20Modding/arm64/)) ·
+  Windows ตรงกับเครื่องของทีมแปลส่วนใหญ่ด้วย
+  · ทางสำรองบน Mac: Valheim มีเวอร์ชัน macOS (ผู้ใช้ยืนยัน 2026-11-26) — ถ้า binary เป็น universal
+  (`lipo -archs Valheim.app/Contents/MacOS/*` มี `x86_64`) รันผ่าน Rosetta ได้ (Get Info → Open using Rosetta หรือ
+  `arch -x86_64`) แล้วติด BepInEx แบบ `run_bepinex.sh` · ถ้ามีแต่ `arm64` ใช้ BepInEx 5 ไม่ได้ · ยังไม่ได้ลอง 📖
+- **เกมตัวเต็ง: Valheim** (Steam) — Mono · ชุมชนม็อดใช้
+  [BepInExPack_Valheim](https://valheim.thunderstore.io/package/denikson/BepInExPack_Valheim/) (BepInEx 5) ·
+  UI เป็น TextMeshPro · มีคำแปลไทยของชุมชนในไฟล์ localization ของเกม
+  ([รายการคีย์ไทยจาก Jötunn](https://valheim-modding.github.io/Jotunn/data/localization/translations/Thai.html)) —
+  ยังไม่ได้ยืนยันว่าเลือก Thai ในเมนูภาษาได้และฟอนต์เกมมี glyph ไทย (ม็อดแปลเวียดนามต้องเปลี่ยนฟอนต์เอง) 📖
+- **สำรอง**: เกม Mono+TMP ใดก็ได้ + XUnity.AutoTranslator ที่ใส่ไฟล์แปลไทยเขียนเอง (ปิดการแปลอัตโนมัติ) —
+  คุมข้อความได้ทุกตัว จงใจใส่ไทยยาว + `{placeholder}` + `<color>` สำหรับกลุ่ม ค ได้ · ต้องสังเกตเพิ่มว่า XUnity
+  กับ hook ของเราทำงานซ้อนกันอย่างไร
 
 ## สิ่งที่ต้องมี
 
 | สิ่งของ | หมายเหตุ |
 |---|---|
-| เกม Unity ที่ runtime เป็น **Mono** (ไม่ใช่ IL2CPP) | วิธีเช็ค: ในโฟลเดอร์ `<เกม>_Data/` มี `Managed/` ที่มี `Assembly-CSharp.dll` = Mono · ถ้ามีโฟลเดอร์ `il2cpp_data` = IL2CPP (ยังไม่รองรับ — เลือกเกมอื่น) |
-| BepInEx 5 (x64 หรือ x86 ตามเกม) | https://github.com/BepInEx/BepInEx/releases · แตกทับโฟลเดอร์เกม แล้วเปิดเกมครั้งหนึ่งให้สร้างโฟลเดอร์ |
-| `ThaiWrap-BepInEx.zip` | จาก [Release v0.8.0](https://github.com/AeyXD/thaiwrap/releases/tag/v0.8.0) |
+| เกม Unity ที่ runtime เป็น **Mono** (ไม่ใช่ IL2CPP) | วิธีเช็ค: `<เกม>_Data/Managed/` มี DLL ของเกม (`Assembly-CSharp.dll` หรือชื่อเฉพาะ เช่น Valheim = `assembly_valheim.dll`) และ**ไม่มี** `GameAssembly.dll` ข้าง exe / `<เกม>_Data/il2cpp_data` (มี = IL2CPP ยังไม่รองรับ — เลือกเกมอื่น) |
+| BepInEx 5 (x64 หรือ x86 ตามเกม) | https://github.com/BepInEx/BepInEx/releases · แตกทับโฟลเดอร์เกม แล้วเปิดเกมครั้งหนึ่งให้สร้างโฟลเดอร์ · Valheim ใช้ BepInExPack_Valheim แทน (แตกโฟลเดอร์ `BepInExPack_Valheim/` ข้างใน zip ทับโฟลเดอร์เกม) |
+| `ThaiWrap-BepInEx.zip` | จาก [Release ล่าสุด](https://github.com/AeyXD/thaiwrap/releases/latest) (ณ เขียนแผนนี้ = v0.12.0) |
 | จุดแสดงข้อความไทยในเกม | เกมที่มีม็อด/ระบบแปลไทย หรือช่องพิมพ์ชื่อตัวละคร หรือไฟล์ข้อความที่แก้ได้ (เช่น `StreamingAssets/*.json`) |
 
 ## ขั้นตอนเตรียม
@@ -21,8 +38,9 @@
 2. คัดลอกโฟลเดอร์ `ThaiWrap/` ทั้งโฟลเดอร์ (DLL + words_th.txt) ไปที่ `<เกม>/BepInEx/plugins/`
 3. (ถ้ามี `words_extra.txt` ของโปรเจกต์นั้น — วางข้าง `words_th.txt` ได้เลย)
 4. โหมด default คือ ZWSP ไม่ต้องตั้งค่าอะไรเพิ่ม (เกม TMP/UGUI ส่วนใหญ่ใช้ได้)
-5. เปิด BepInEx console ได้โดยแก้ `BepInEx/config/BepInEx.cfg` → `[Logging.Disk]` เปิด
-   `LogConsole` หรือดู `BepInEx/LogOutput.log` หลังปิดเกม
+5. เปิด BepInEx console ได้โดยแก้ `BepInEx/config/BepInEx.cfg` → `[Logging.Console]` → `Enabled = true`
+   หรือดู `BepInEx/LogOutput.log` หลังปิดเกม · config ของ ThaiWrap อยู่ที่ `BepInEx/config/thaiwrap.plugin.cfg`
+   (สร้างหลังเปิดเกมครั้งแรก)
 
 ## Checklist การทดสอบ
 
@@ -30,9 +48,10 @@
 
 | # | รายการ | วิธีตรวจ |
 |---|---|---|
-| ก1 | plugin โหลด + พจนานุกรมครบ | ใน log มีข้อความ `โหลดพจนานุกรม 65,758 คำ` (หรือมากกว่าถ้ามี words_extra) |
+| ก1 | plugin โหลด + พจนานุกรมครบ | ใน log มีข้อความ `โหลดพจนานุกรม 65758 คำ` (ไม่มีจุลภาค · มากกว่านี้ถ้ามี words_extra) และ `ThaiWrap 0.12.0` ในรายการ plugin ที่ BepInEx โหลด |
 | ก2 | hook สำเร็จอย่างน้อย 1 ตำแหน่ง | log มี `hook สำเร็จ N ตำแหน่ง (TMP/UGUI ที่พบในเกมนี้)` และ N ≥ 1 |
 | ก3 | ไม่มี error แดงจาก ThaiWrap | log ไม่มี ` ThaiWrap` ระดับ Error/Exception |
+| ก4 | ข้อความไทยทุกจุดผ่าน hook | ไล่ดูเมนู/บทสนทนา/tooltip — จุดที่ไทยยาวแต่ไม่ถูกตัดเลย จดไว้: hook ครอบเฉพาะ setter ของ `.text` ข้อความที่เกมตั้งผ่าน `TMP_Text.SetText(...)` อาจไม่ผ่าน setter (📖 ยังไม่ได้ยืนยันกับซอร์ส TMP) — เปิด UnityExplorer ดู component ของจุดนั้นแล้วจดชื่อ |
 
 ### ข. ตัดบรรทัดภาษาไทยจริง
 
@@ -84,11 +103,12 @@
 | ฉ เสถียรภาพ | ☐ | | |
 
 เกณฑ์ผ่าน: **ก ข ค ต้องผ่านทั้งกลุ่ม** · ง จ ฉ ผ่านอย่างน้อย 2/3 กลุ่ม (จดเหตุผลถ้าข้าม)
-สิ่งที่พบระหว่างทดสอบ → แก้ใน plugin → `dotnet test` ผ่านก่อนจบทุกครั้ง (กฎ repo) →
-ปล่อย v0.8.1 พร้อมแก้ release notes
+สิ่งที่พบระหว่างทดสอบ → แก้ใน plugin → เทส `dotnet run --project tests/ThaiWrap.Tests -- data/words_th.txt`
+ผ่านก่อนจบทุกครั้ง (กฎ repo — `dotnet test` ไม่รันเทส) → ออกเวอร์ชัน patch ถัดไปพร้อมถอนข้อความ
+"ยังไม่ได้ทดสอบในเกมจริง" จาก release notes
 
 ## บันทึกสภาพแวดล้อมทดสอบ (เติมจริง)
 
 - เกม: <ชื่อเกม + เวอร์ชัน> · เวอร์ชัน Unity: <ดูจาก `<เกม>_Data/globalgamemanagers` หรือหน้า About>
-- BepInEx: <เวอร์ชัน> · OS: <Windows/macOS/Linux>
-- ThaiWrap: v0.8.0 · วันที่ทดสอบ: <วันที่>
+- BepInEx: <เวอร์ชัน> · OS: Windows <เวอร์ชัน>
+- ThaiWrap: v0.12.0 · วันที่ทดสอบ: <วันที่>
