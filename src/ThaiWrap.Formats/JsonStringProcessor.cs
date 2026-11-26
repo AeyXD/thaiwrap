@@ -13,7 +13,14 @@ namespace ThaiWrap.Formats
     {
         /// <param name="keyFilter">ถ้าระบุ — แปลงเฉพาะ value ที่อยู่ใต้ key ชื่อนี้
         /// (ค่าใน array ใช้ชื่อ key ที่ครอบ array นั้น เช่น {"lines":["a"]} → key "lines")</param>
-        public static string Process(string input, Func<string, string> transform, Func<string, bool>? keyFilter = null)
+        public static string Process(string input, Func<string, string> transform, Func<string, bool>? keyFilter = null) =>
+            Process(input, transform, keyFilter, null);
+
+        /// <param name="pathFilter">ถ้าระบุ — แปลงเฉพาะ value ที่ path จาก root ผ่านเงื่อนไข (segment = ชื่อ key หรือ
+        /// เลข index ของ array เช่น {"items":[{"desc":"…"}]} → ["items","0","desc"] — ดู <see cref="JsonPathPattern"/>) ·
+        /// ระบุทั้งสองตัว = value ที่ผ่านตัวใดตัวหนึ่ง</param>
+        public static string Process(string input, Func<string, string> transform, Func<string, bool>? keyFilter,
+            Func<IReadOnlyList<string>, bool>? pathFilter)
         {
             var sb = new StringBuilder(input.Length);
             int i = 0, n = input.Length;
@@ -35,6 +42,7 @@ namespace ThaiWrap.Formats
                     sb.Append(c); i++; continue;
                 }
                 if ((c == '}' || c == ']') && frames.Count > 0) { frames.RemoveAt(frames.Count - 1); sb.Append(c); i++; continue; }
+                if (c == ',' && frames.Count > 0 && !frames[frames.Count - 1].IsObject) frames[frames.Count - 1].Index++; // element ถัดไปของ array
                 if (c != '"') { sb.Append(c); i++; continue; }
 
                 // อ่าน string literal ทั้งอัน (รวม ")
@@ -62,7 +70,10 @@ namespace ThaiWrap.Formats
 
                 string decoded = Decode(literal);
                 string? ownerKey = frames.Count > 0 ? frames[frames.Count - 1].Key : null;
-                if (keyFilter != null && (ownerKey == null || !keyFilter(ownerKey)))
+                bool selected = keyFilter == null && pathFilter == null
+                    || keyFilter != null && ownerKey != null && keyFilter(ownerKey)
+                    || pathFilter != null && pathFilter(CurrentPath(frames));
+                if (!selected)
                 {
                     sb.Append(literal); continue; // ไม่ใช่ field ที่เลือก
                 }
@@ -77,6 +88,16 @@ namespace ThaiWrap.Formats
         {
             public bool IsObject;
             public string? Key;
+            public int Index; // array: ลำดับ element ปัจจุบัน (นับจาก ',' ในระดับนี้)
+        }
+
+        /// <summary>path ของ value ปัจจุบัน: object → ชื่อ key ล่าสุด · array → เลข index</summary>
+        private static List<string> CurrentPath(List<JsonFrame> frames)
+        {
+            var path = new List<string>(frames.Count);
+            foreach (var f in frames)
+                path.Add(f.IsObject ? f.Key ?? "" : f.Index.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            return path;
         }
 
         /// <summary>ถอดรหัส string literal (รวม ") เป็นค่าจริง</summary>

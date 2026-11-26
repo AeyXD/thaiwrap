@@ -513,6 +513,80 @@ namespace ThaiWrap.Tests
             Check("json ซ้อน: value ใน array ใช้ key ของ array ที่ครอบ (แปลงทั้งสอง element)",
                 nestedOut2.Split(zw).Length - 1 >= 2, nestedOut2.Replace(zw.ToString(), "·"));
 
+            Console.WriteLine("== formats: json (--json-path) ==");
+            {
+                const string pj = "{\"menu.start\":\"เริ่มเกมใหม่\",\"items\":[{\"name\":\"ดาบเหล็ก\",\"desc\":\"ดาบคมกริบ\"},{\"name\":\"โล่ไม้\",\"desc\":\"โล่ธรรมดา\"}],\"deep\":{\"x\":{\"desc\":\"ลึกมากเลย\"}}}";
+                Func<string, string> byPath = spec =>
+                {
+                    var pats = JsonPathPattern.ParseList(spec);
+                    return JsonStringProcessor.Process(pj, s => "<" + s + ">", null, path => pats.Any(x => x.Matches(path)));
+                };
+                string a1 = byPath("/items/*/desc");
+                Check("json-path: /items/*/desc แปลง desc ใน array ทุกตัว ไม่แตะ name/deep",
+                    a1.Contains("\"<ดาบคมกริบ>\"") && a1.Contains("\"<โล่ธรรมดา>\"") && a1.Contains("\"ดาบเหล็ก\"") && a1.Contains("\"ลึกมากเลย\""), a1);
+                string a2 = byPath("/items/1/name");
+                Check("json-path: index ของ array นับถูก (element ที่ 2 เท่านั้น)",
+                    a2.Contains("\"<โล่ไม้>\"") && a2.Contains("\"ดาบเหล็ก\"") && !a2.Contains("<ดาบคมกริบ>"), a2);
+                string a3 = byPath("/menu.start");
+                Check("json-path: key ที่มีจุดเขียนตรงได้ (ไม่ใช่ตัวคั่น)", a3.Contains("\"<เริ่มเกมใหม่>\"") && CountOccurrences(a3, "<") == 1, a3);
+                string a4 = byPath("/**/desc");
+                Check("json-path: ** = กี่ชั้นก็ได้", CountOccurrences(a4, "<") == 3 && a4.Contains("<ลึกมากเลย>"), a4);
+                Check("json-path: หลาย pattern คั่นด้วย ,", CountOccurrences(byPath("/menu.start, /deep/x/desc"), "<") == 2);
+                Check("json-path: escape ~1 = / ตาม RFC 6901",
+                    JsonPathPattern.Parse("/a~1b").Matches(new[] { "a/b" }) && !JsonPathPattern.Parse("/a~1b").Matches(new[] { "a", "b" }));
+                bool threw = false;
+                try { JsonPathPattern.Parse("items/desc"); } catch (ArgumentException) { threw = true; }
+                Check("json-path: ไม่ขึ้นต้นด้วย / = error", threw);
+                string a5 = JsonStringProcessor.Process(pj, s => "<" + s + ">", k => k == "name", path => path.Count == 1 && path[0] == "menu.start");
+                Check("json-path + json-keys: value ที่ตรงตัวใดตัวหนึ่ง", CountOccurrences(a5, "<") == 3, a5);
+                const string arr = "[[\"ก\",\"ข\"],{\"k\":[1,{\"t\":\"ค\"}]}]";
+                string a6 = JsonStringProcessor.Process(arr, s => "<" + s + ">", null, path => string.Join("/", path) == "1/k/1/t" || string.Join("/", path) == "0/1");
+                Check("json-path: array ซ้อน/ตัวเลขใน array นับ index ถูก", a6 == "[[\"ก\",\"<ข>\"],{\"k\":[1,{\"t\":\"<ค>\"}]}]", a6);
+            }
+
+            Console.WriteLine("== คอลัมน์ต้นฉบับ/คำแปลที่ระบุเอง (TableColumns) ==");
+            {
+                var t = new List<List<string>>
+                {
+                    new List<string> { "id", "en", "note", "th", "th_short" },
+                    new List<string> { "q1", "Get {count} gold", "A very long translator note about the gold reward", "ได้ทอง {count}", "" },
+                };
+                var auto = TableColumns.Resolve(null, null, t[0]);
+                MispasteDetector.PickThaiEnglish(t[1], out var aTh, out var aEn);
+                Check("columns: ไม่ระบุ = เดาเอง (เดิม) — คอลัมน์ note ยาวกว่าถูกเลือกเป็นอังกฤษ",
+                    auto.IsAuto && aEn == t[1][2] && auto.TranslationCells(t[1], 1).Single() == "ได้ทอง {count}");
+                var named = TableColumns.Resolve("th,th_short", "en", t[0]);
+                Check("columns: ชื่อ → index + ข้ามแถว header + เซลล์ว่างไม่นับ",
+                    named.Source == 1 && named.FirstDataRow == 1 && named.TranslationCells(t[0], 0).Count == 0 &&
+                    named.TranslationCells(t[1], 1).Single() == "ได้ทอง {count}" && named.SourceCell(t[1], out bool ex) == "Get {count} gold" && ex);
+                var numeric = TableColumns.Resolve(null, "2", t[0]);
+                Check("columns: เลข 1-based ไม่ข้าม header · คำแปลยังเดาเอง", numeric.Source == 1 && numeric.FirstDataRow == 0 && numeric.Translation == null);
+                Func<Action, bool> throws = act => { try { act(); return false; } catch (ArgumentException) { return true; } };
+                Check("columns: error — ชื่อไม่พบ · เลข 0 · ต้นฉบับซ้ำคำแปล · หลายคอลัมน์ต้นฉบับ",
+                    throws(() => TableColumns.Resolve(null, "bogus", t[0])) && throws(() => TableColumns.Resolve("0", null, t[0])) &&
+                    throws(() => TableColumns.Resolve("th", "th", t[0])) && throws(() => TableColumns.Resolve(null, "en,note", t[0])));
+                var row2 = new List<string> { "q2", "", "x", "ทดสอบ" };
+                Check("columns: ต้นฉบับที่ระบุว่าง/เกินแถว = null แต่ explicit (ไม่เดาแทน)",
+                    named.SourceCell(row2, out bool ex2) == null && ex2 && TableColumns.Resolve(null, "9", null).SourceCell(row2, out _) == null);
+
+                // --mispaste: picker เลือกคอลัมน์เอง — ตารางที่คอลัมน์หมายเหตุอังกฤษยาวทำให้กฎ ratio ฟ้องผิด
+                string longTh = "ข้อความไทยที่ยาวพอสมควรสำหรับทดสอบอัตราส่วนความยาว";
+                var mrows = new List<List<string>>
+                {
+                    new List<string> { "en", "note", "th" },
+                    new List<string> { "Short text here", string.Concat(Enumerable.Repeat("a long translator note about context ", 12)), longTh },
+                };
+                int autoHits = MispasteDetector.Detect(mrows).Count;
+                var msel = TableColumns.Resolve("th", "en", mrows[0]);
+                int explicitHits = MispasteDetector.Detect(mrows, (IReadOnlyList<string> row, int ri, out string? th, out string? en) =>
+                {
+                    var cells = msel.TranslationCells(row, ri);
+                    th = cells.Count > 0 ? cells[0] : null;
+                    en = th == null ? null : msel.SourceCell(row, out _);
+                }).Count;
+                Check("mispaste: picker ใช้คอลัมน์ที่ระบุ (note ยาวไม่ทำให้ฟ้องผิด)", autoHits == 1 && explicitHits == 0, autoHits + "/" + explicitHits);
+            }
+
             Console.WriteLine("== formats: po ==");
             string po = File.ReadAllText("tests/samples/messages.po", Encoding.UTF8);
             string poOut = PoProcessor.Process(po, s => seg.InsertZwsp(s));

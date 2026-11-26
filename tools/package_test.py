@@ -11,6 +11,8 @@
  5. hairspace: แทรก U+200A ไม่ปน ZWSP + สถิติรายงาน hairspace+N
  6. --inplace สองรอบ: .bak เก็บต้นฉบับไว้ + รอบสองข้ามไฟล์
  7. --placeholders: placeholder หาย/เกิน → exit 1 + รายงานแถว · ถูกครบ → exit 0 · ไม่เขียนไฟล์ · เคสรีวิว v0.12.0 (#13–#15)
+ 8. --source-column/--columns เลือกคู่ต้นฉบับ–คำแปลเอง (คอลัมน์หมายเหตุอังกฤษไม่ถูกเดาเป็นต้นฉบับ) · error ชื่อคอลัมน์ = exit 2
+    · --json-path /items/*/desc แปลงเฉพาะ path ที่เลือก
 """
 import json
 import shutil
@@ -128,6 +130,24 @@ def main() -> int:
         r = run(binary, ph, "--placeholders", cwd=work)
         check("placeholders: ถูกครบ exit 0 + ไม่สร้างไฟล์", r.returncode == 0 and sorted(p.name for p in ph_dir.iterdir()) == ["ph.csv"],
               f"exit={r.returncode}")
+
+        # 8. เลือกคอลัมน์ต้นฉบับ/คำแปลเอง + --json-path
+        ph.write_text("id,en,note,th\nq1,Get {count} gold,Translator note: a much longer English comment about gold,ได้ทอง {count}\n",
+                      encoding="utf-8")
+        r = run(binary, ph, "--placeholders", cwd=work)
+        check("source-column: ไม่ระบุ = เดาคอลัมน์ note ผิด (ฟ้อง เกิน)", r.returncode == 1 and "เกิน {count}" in r.stderr, f"exit={r.returncode}")
+        r = run(binary, ph, "--placeholders", "--source-column", "en", "--columns", "th", cwd=work)
+        check("source-column: ระบุ en/th = ผ่าน exit 0", r.returncode == 0 and "เทียบ 1 คู่" in r.stderr,
+              f"exit={r.returncode} {r.stderr.strip().splitlines()[-1] if r.stderr else ''}")
+        r = run(binary, ph, "--placeholders", "--source-column", "bogus", cwd=work)
+        check("source-column: ชื่อไม่พบ = exit 2 + บอกชื่อที่มี", r.returncode == 2 and "id, en, note, th" in r.stderr, f"exit={r.returncode}")
+        jp = work / "jp.json"
+        jp.write_text('{"items":[{"name":"ดาบเหล็กกล้า","desc":"ดาบคมกริบจากแดนไกล"}],"menu.start":"เริ่มเกมใหม่"}', encoding="utf-8")
+        r = run(binary, jp, "--json-path", "/items/*/desc", "-o", work / "jp.out.json", cwd=work)
+        jdata = json.loads((work / "jp.out.json").read_text(encoding="utf-8"))
+        check("json-path: แปลงเฉพาะ /items/*/desc",
+              r.returncode == 0 and ZWSP in jdata["items"][0]["desc"] and ZWSP not in jdata["items"][0]["name"]
+              and ZWSP not in jdata["menu.start"], f"exit={r.returncode}")
 
         # 6. --inplace สองรอบ + backup (แยกโฟลเดอร์เฉพาะ กัน run ตายเพราะ cp874.txt ในโฟลเดอร์เดียวกัน)
         folder = work / "inplace"

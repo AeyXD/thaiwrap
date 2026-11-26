@@ -41,14 +41,21 @@ namespace ThaiWrap.Formats
         /// ตรวจตาราง (csv/tsv) — เลือกเซลล์เอง: เซลล์ที่มีตัวอักษรไทยมากสุด = คำแปล ·
         /// ที่เหลือเซลล์ที่มีตัวละตินมากสุด = ต้นฉบับ · คืนรายการน่าสงสัยเรียงตามแถว (นับรวมแถวหัวตาราง)
         /// </summary>
-        public static List<MispasteHit> Detect(IEnumerable<IReadOnlyList<string>> rows)
+        public static List<MispasteHit> Detect(IEnumerable<IReadOnlyList<string>> rows) =>
+            Detect(rows, (IReadOnlyList<string> row, int rowIndex, out string? thai, out string? en) => PickThaiEnglish(row, out thai, out en));
+
+        /// <summary>เลือกคู่คำแปล/ต้นฉบับของแถวเอง (rowIndex 0-based) — null ฝั่งใดฝั่งหนึ่ง = ข้ามแถว</summary>
+        public delegate void PairPicker(IReadOnlyList<string> row, int rowIndex, out string? thai, out string? english);
+
+        /// <summary>ตรวจตารางโดยให้ผู้เรียกเลือกคู่คำแปล/ต้นฉบับเอง (เช่น คอลัมน์ที่ผู้ใช้ระบุ — <see cref="TableColumns"/>)</summary>
+        public static List<MispasteHit> Detect(IEnumerable<IReadOnlyList<string>> rows, PairPicker pick)
         {
             var pairs = new List<RowPair>(); // rowNo 1-based
             int r = 0;
             foreach (var row in rows)
             {
                 r++;
-                PickThaiEnglish(row, out string? thai, out string? en);
+                pick(row, r - 1, out string? thai, out string? en);
                 if (thai == null || en == null) continue;
                 pairs.Add(new RowPair { RowNo = r, En = Norm(en), Thai = Norm(thai) });
             }
@@ -164,7 +171,7 @@ namespace ThaiWrap.Formats
         {
             thai = null;
             english = null;
-            int thaiCount = 0, enCount = 0;
+            int thaiCount = 0;
             foreach (var cell in row)
             {
                 if (cell == null) continue;
@@ -172,12 +179,21 @@ namespace ThaiWrap.Formats
                 if (th > thaiCount) { thaiCount = th; thai = cell; }
             }
             if (thai == null) return;
+            english = PickEnglish(row, thai);
+        }
+
+        /// <summary>เซลล์อื่นนอกจากคำแปลที่มีอักษรละตินมากสุด (ต้นฉบับที่เดาได้) — null = ไม่มีละตินเลย</summary>
+        public static string? PickEnglish(IReadOnlyList<string> row, string thai)
+        {
+            string? english = null;
+            int enCount = 0;
             foreach (var cell in row)
             {
                 if (cell == null || ReferenceEquals(cell, thai)) continue;
                 int lat = CountLatin(cell);
                 if (lat > enCount) { enCount = lat; english = cell; }
             }
+            return english;
         }
 
         private static int CountThai(string s)

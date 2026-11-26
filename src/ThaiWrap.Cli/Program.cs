@@ -22,6 +22,8 @@ namespace ThaiWrap.Cli
             public string Format = "auto";
             public string? Columns;
             public string? JsonKeys;
+            public string? JsonPath;
+            public string? SourceColumn;
             public string BreakChar = "zwsp";
             public bool ChunkExplicit;
             public bool MinLenExplicit;
@@ -180,7 +182,14 @@ namespace ThaiWrap.Cli
 
             (string input, _) = ReadTextWithBom(cfg.InputPath);
             var table = CsvProcessor.ParseTable(input, format == "tsv" ? '\t' : DetectCsvDelimiter(input));
-            var hits = MispasteDetector.Detect(table);
+            var sel = ResolveTableColumns(cfg, table);
+            var hits = sel.IsAuto ? MispasteDetector.Detect(table) : MispasteDetector.Detect(table,
+                (IReadOnlyList<string> row, int ri, out string? thai, out string? en) =>
+                {
+                    var cells = sel.TranslationCells(row, ri);
+                    thai = cells.Count > 0 ? cells[0] : null; // หลายคอลัมน์คำแปล: --mispaste ใช้คอลัมน์แรกที่มีข้อความ
+                    en = thai == null ? null : sel.SourceCell(row, out bool ex) ?? (ex ? null : MispasteDetector.PickEnglish(row, thai));
+                });
 
             Console.Error.WriteLine("--- ตรวจ \"วางคำแปลผิดแถว\": " + cfg.InputPath + " (" + table.Count + " แถว) — " +
                 hits.Count + " จุดน่าสงสัย · เป็นข้อเสนอ ตรวจด้วยตาก่อนแก้ที่ต้นทาง");
@@ -241,7 +250,7 @@ namespace ThaiWrap.Cli
                     continue;
                 }
                 (string input, _) = ReadTextWithBom(file);
-                foreach (var p in BuildSourcePairs(input, format, ref noSource))
+                foreach (var p in BuildSourcePairs(cfg, input, format, ref noSource))
                 {
                     pairs++;
                     var m = PlaceholderChecker.Compare(p.Source, p.Translation);
@@ -277,7 +286,7 @@ namespace ThaiWrap.Cli
         /// ที่มีอักษรละตินมากสุด — ไม่ใช้ตัวเลือกของ --mispaste ตรง ๆ เพราะคอลัมน์ ID ยาว ๆ จะถูกเลือกแล้วฟ้อง "เกิน" ผิด ·
         /// po = msgid/msgstr (msgstr ว่าง = ยังไม่แปล ข้าม) · keyvalue = key/ค่า เฉพาะ key ที่ดูเป็นถ้อยคำ (แบบ XUnity)
         /// </summary>
-        private static List<SourcePair> BuildSourcePairs(string input, string format, ref int noSource)
+        private static List<SourcePair> BuildSourcePairs(Config cfg, string input, string format, ref int noSource)
         {
             var list = new List<SourcePair>();
             switch (format)
@@ -286,20 +295,26 @@ namespace ThaiWrap.Cli
                 case "tsv":
                 {
                     var table = CsvProcessor.ParseTable(input, format == "tsv" ? '\t' : DetectCsvDelimiter(input));
+                    var sel = ResolveTableColumns(cfg, table);
                     for (int r = 0; r < table.Count; r++)
                     {
-                        MispasteDetector.PickThaiEnglish(table[r], out string? thai, out _);
-                        if (thai == null) continue;
-                        string? src = null;
-                        int best = -1; // -1: เซลล์ที่ผ่าน LooksLikeSource แต่ไม่มีละตินเลย ("{0}") ก็เลือกได้ (#13)
-                        foreach (var cell in table[r])
+                        foreach (var thai in sel.TranslationCells(table[r], r))
                         {
-                            if (ReferenceEquals(cell, thai) || !PlaceholderChecker.LooksLikeSource(cell)) continue;
-                            int lat = cell.Count(c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'));
-                            if (lat > best) { best = lat; src = cell; }
+                            // --source-column = ใช้เซลล์นั้นตรง ๆ (ไม่กรองด้วย LooksLikeSource — ผู้ใช้ยืนยันเองแล้ว)
+                            string? src = sel.SourceCell(table[r], out bool explicitSource);
+                            if (!explicitSource)
+                            {
+                                int best = -1; // -1: เซลล์ที่ผ่าน LooksLikeSource แต่ไม่มีละตินเลย ("{0}") ก็เลือกได้ (#13)
+                                foreach (var cell in table[r])
+                                {
+                                    if (ReferenceEquals(cell, thai) || !PlaceholderChecker.LooksLikeSource(cell)) continue;
+                                    int lat = cell.Count(c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'));
+                                    if (lat > best) { best = lat; src = cell; }
+                                }
+                            }
+                            if (src == null) { if (PlaceholderChecker.Extract(thai).Count > 0) noSource++; continue; }
+                            list.Add(new SourcePair { Source = src, Translation = thai, Line = r + 1, IsRow = true });
                         }
-                        if (src == null) { if (PlaceholderChecker.Extract(thai).Count > 0) noSource++; continue; }
-                        list.Add(new SourcePair { Source = src, Translation = thai, Line = r + 1, IsRow = true });
                     }
                     break;
                 }
@@ -353,6 +368,8 @@ namespace ThaiWrap.Cli
                     case "-f": cfg.Format = Val(args, ref i); break;
                     case "--columns": cfg.Columns = Val(args, ref i); break;
                     case "--json-keys": cfg.JsonKeys = Val(args, ref i); break;
+                    case "--json-path": cfg.JsonPath = Val(args, ref i); break;
+                    case "--source-column": cfg.SourceColumn = Val(args, ref i); break;
                     case "--break-char":
                     {
                         cfg.BreakChar = Val(args, ref i);
@@ -577,7 +594,7 @@ namespace ThaiWrap.Cli
                 // นับจากอินพุตดิบทั้งไฟล์ — ค่าประมาณ (ไม่รู้เรื่อง mask/คอลัมน์ที่เลือก) แต่พอใช้เตือน
                 var issues = ThaiNormalizer.Count(input);
                 CollectUnknowns(segmenter, input, totals.UnknownCounts);
-                totals.Checks.AddRange(BuildCheckEntries(path, input, format ?? "text"));
+                totals.Checks.AddRange(BuildCheckEntries(cfg, path, input, format ?? "text"));
                 totals.CheckFiles++;
                 totals.Issues.DoubleE += issues.DoubleE;
                 totals.Issues.DoubledMark += issues.DoubledMark;
@@ -710,7 +727,7 @@ namespace ThaiWrap.Cli
         /// แยกไฟล์เป็นข้อความที่มีคู่อังกฤษ: csv/tsv = เซลล์ไทยกับเซลล์ละตินมากสุดของแถว (แบบ --mispaste) ·
         /// po = msgstr กับ msgid · keyvalue = ค่ากับ key · ฟอร์แมตอื่นทั้งไฟล์เป็นชิ้นเดียวไม่มีอังกฤษ
         /// </summary>
-        private static List<CheckEntry> BuildCheckEntries(string path, string input, string format)
+        private static List<CheckEntry> BuildCheckEntries(Config cfg, string path, string input, string format)
         {
             var list = new List<CheckEntry>();
             switch (format)
@@ -719,10 +736,16 @@ namespace ThaiWrap.Cli
                 case "tsv":
                 {
                     var table = CsvProcessor.ParseTable(input, format == "tsv" ? '\t' : DetectCsvDelimiter(input));
+                    var sel = ResolveTableColumns(cfg, table);
                     for (int r = 0; r < table.Count; r++)
                     {
-                        MispasteDetector.PickThaiEnglish(table[r], out string? thai, out string? en);
-                        if (thai != null) list.Add(new CheckEntry { Path = path, Text = thai, English = AsEnglish(en), Line = r + 1, IsRow = true });
+                        foreach (var thai in sel.TranslationCells(table[r], r))
+                        {
+                            // --source-column ไม่ผ่าน AsEnglish: ผู้ใช้ยืนยันว่าเป็นต้นฉบับ (ประโยคที่มีตัวเลขก็นับ)
+                            string? en = sel.SourceCell(table[r], out bool explicitSource);
+                            if (!explicitSource) en = AsEnglish(MispasteDetector.PickEnglish(table[r], thai));
+                            list.Add(new CheckEntry { Path = path, Text = thai, English = en, Line = r + 1, IsRow = true });
+                        }
                     }
                     return list;
                 }
@@ -833,7 +856,7 @@ namespace ThaiWrap.Cli
                     return CsvProcessor.Process(input, opts, transform);
                 }
                 case "json":
-                    return JsonStringProcessor.Process(input, transform, BuildJsonKeyFilter(cfg));
+                    return JsonStringProcessor.Process(input, transform, BuildJsonKeyFilter(cfg), BuildJsonPathFilter(cfg));
                 case "po":
                     return PoProcessor.Process(input, transform);
                 case "keyvalue":
@@ -849,6 +872,20 @@ namespace ThaiWrap.Cli
                     return sb.ToString();
                 }
             }
+        }
+
+        /// <summary>
+        /// คอลัมน์คำแปล/ต้นฉบับของโหมดตรวจ csv/tsv: --columns (คำแปล) + --source-column (ต้นฉบับ) — ไม่ระบุ = เดาจากเนื้อหา
+        /// </summary>
+        private static TableColumns ResolveTableColumns(Config cfg, List<List<string>> table) =>
+            TableColumns.Resolve(cfg.Columns, cfg.SourceColumn, table.Count > 0 ? table[0] : null);
+
+        /// <summary>--json-path "/items/*/desc" → แปลงเฉพาะ value ที่ path ตรง (null = ไม่กรองตาม path)</summary>
+        private static Func<IReadOnlyList<string>, bool>? BuildJsonPathFilter(Config cfg)
+        {
+            if (cfg.JsonPath == null) return null;
+            var patterns = JsonPathPattern.ParseList(cfg.JsonPath);
+            return path => patterns.Any(p => p.Matches(path));
         }
 
         /// <summary>--json-keys "desc,tooltip" → แปลงเฉพาะ value ใต้ key เหล่านี้ (null = ทุก value)</summary>
@@ -963,6 +1000,10 @@ namespace ThaiWrap.Cli
             "  -f, --format <fmt>    auto | text | csv | tsv | json | po | keyvalue (default auto ตามนามสกุล)\n" +
             "  --columns <list>      csv/tsv: \"1,3\" หรือ \"ชื่อคอลัมน์\" — default ทุกคอลัมน์ (ใช้ชื่อ = ข้ามแถว header)\n" +
             "  --json-keys <list>    json: แปลงเฉพาะ value ใต้ key เหล่านี้ เช่น \"desc,tooltip\" — default ทุก string value\n" +
+            "  --json-path <list>    json: แปลงเฉพาะ value ตาม path แบบ JSON Pointer เช่น \"/items/*/desc\" (* = หนึ่งชั้น ** = กี่ชั้นก็ได้)\n" +
+            "                        — ใช้ร่วม --json-keys ได้ (value ที่ตรงตัวใดตัวหนึ่ง)\n" +
+            "  --source-column <c>   csv/tsv: คอลัมน์ต้นฉบับ (เลขหรือชื่อ) สำหรับ --placeholders/--stats/--mispaste\n" +
+            "                        — โหมดตรวจเหล่านี้ใช้ --columns เป็นคอลัมน์คำแปล · ไม่ระบุ = เดาจากเนื้อหา\n" +
             "  --break-char <c>      zwsp (default) | hairspace | space — space = เอนจินที่ตัดเฉพาะช่องว่างจริง (Aurora/W1)\n" +
             "  --chunk <n>           รวมคำเป็นกลุ่มวลี ≤N ตัวอักษร แล้วเว้นตัวคั่นเฉพาะรอยต่อกลุ่ม (0=ทุกรอยคำ · space default 12)\n" +
             "  --min-len <n>         งดแตะข้อความที่ทุกบรรทัดสั้นกว่า N ตัวอักษรไทย (space default 40 · 0=แตะทุกรายการ)\n" +
