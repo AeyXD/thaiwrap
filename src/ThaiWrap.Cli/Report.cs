@@ -87,7 +87,7 @@ namespace ThaiWrap.Cli
             var head = new byte[600];
             int n;
             using (var fs = File.OpenRead(path)) n = fs.Read(head, 0, head.Length);
-            string s = Encoding.UTF8.GetString(head, 0, n).TrimStart('\uFEFF');
+            string s = Encoding.UTF8.GetString(head, 0, n).TrimStart('\uFEFF').Replace("\r\n", "\n"); // CRLF จาก git autocrlf/editor ก็ยังเป็นรายงาน
             return s.StartsWith(QaReport.JsonHead, StringComparison.Ordinal) || s.Contains(QaReport.HtmlGenerator);
         }
 

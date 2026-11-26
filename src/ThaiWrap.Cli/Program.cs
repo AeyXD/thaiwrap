@@ -313,10 +313,10 @@ namespace ThaiWrap.Cli
         private static bool IsQaReportFile(string path)
         {
             if (!path.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) return false;
-            var head = new byte[QaReport.JsonHead.Length + 3];
+            var head = new byte[QaReport.JsonHead.Length + 16]; // เผื่อ BOM + CR
             int n;
             using (var fs = File.OpenRead(path)) n = fs.Read(head, 0, head.Length);
-            string s = Encoding.UTF8.GetString(head, 0, n).TrimStart('\uFEFF');
+            string s = Encoding.UTF8.GetString(head, 0, n).TrimStart('\uFEFF').Replace("\r\n", "\n"); // CRLF จาก git autocrlf/editor ก็ยังเป็นรายงาน
             return s.StartsWith(QaReport.JsonHead, StringComparison.Ordinal);
         }
 

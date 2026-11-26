@@ -261,12 +261,25 @@ def main() -> int:
         for ext in ("json", "html"):
             r1 = run(binary, "loc", "--report", f"out/qa.{ext}", cwd=g_dir)
             first = (g_dir / "out" / f"qa.{ext}").read_text(encoding="utf-8") if r1.returncode == 0 else ""
-            (g_dir / "out" / f"qa.{ext}").write_text(first + "OLD-REPORT-MARKER", encoding="utf-8")  # รายงานเก่า
+            # รายงานเก่าที่ถูกแปลงเป็น CRLF (git autocrlf/editor) — ต้องยังจำได้ว่าเป็นรายงาน (CI Windows เจอ 7228cad)
+            with open(g_dir / "out" / f"qa.{ext}", "w", encoding="utf-8", newline="") as fh:
+                fh.write(first.replace("\r\n", "\n").replace("\n", "\r\n") + "OLD-REPORT-MARKER")
             r2 = run(binary, "loc", "--report", f"out/qa.{ext}", cwd=g_dir)
             check(f"#17 สร้างรายงาน {ext} ใหม่ + เขียนทับรายงานเก่าได้",
                   r1.returncode == 0 and r2.returncode == 0 and first != ""
                   and "OLD-REPORT-MARKER" not in (g_dir / "out" / f"qa.{ext}").read_text(encoding="utf-8")
                   and g_src.read_bytes() == g_bytes, f"exit={r1.returncode}/{r2.returncode}")
+
+        # รายงาน JSON เก่าแบบ BOM + CRLF อยู่ในโฟลเดอร์ที่ตรวจ — ต้องไม่ถูกนับเป็นไฟล์แปล
+        qa_old = (g_dir / "out" / "qa.json").read_text(encoding="utf-8").replace("\r\n", "\n")
+        with open(g_dir / "loc" / "old-qa.json", "w", encoding="utf-8-sig", newline="") as fh:
+            fh.write(qa_old.replace("\n", "\r\n"))
+        r = run(binary, "loc", "--report", "-", cwd=g_dir)
+        try:
+            n_files = json.loads(r.stdout)["summary"]["files"]
+        except (ValueError, KeyError):
+            n_files = None
+        check("#17 รายงานเก่า BOM+CRLF ในโฟลเดอร์ไม่ถูกตรวจเป็นไฟล์แปล", n_files == 1, f"files={n_files}")
 
         # 6. --inplace สองรอบ + backup (แยกโฟลเดอร์เฉพาะ กัน run ตายเพราะ cp874.txt ในโฟลเดอร์เดียวกัน)
         folder = work / "inplace"
