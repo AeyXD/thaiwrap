@@ -806,6 +806,8 @@ namespace ThaiWrap.Tests
                 string html = rep.ToHtml();
                 Check("report: HTML escape แท็กของเกม — แสดงเป็นตัวอักษร ไม่กลายเป็น markup",
                     html.Contains("สวัสดี &lt;b&gt;{nmae}&lt;/b&gt;") && !html.Contains("<b>{nmae}") && html.Contains("&quot;q&quot;"), "");
+                Check("report #17: HTML มี generator meta ในหัวไฟล์ (CLI ใช้ยืนยันก่อนเขียนทับ)",
+                    html.IndexOf(QaReport.HtmlGenerator, StringComparison.Ordinal) is int gi && gi >= 0 && gi < 300);
                 Check("report: HTML ไฟล์เดียวจบ (ไม่โหลด script/stylesheet ภายนอก) + โหมดมืด",
                     !html.Contains("<script") && !html.Contains("<link") && !html.Contains("http") && html.Contains("prefers-color-scheme:dark"));
                 Check("report: HTML จัดกลุ่มตามตัวตรวจ (ต้องแก้ก่อน)",

@@ -17,8 +17,11 @@
 10. เลขคอลัมน์เกินตาราง (#16): --placeholders/--check/-o ต้อง exit 2 + บอกจำนวนคอลัมน์ · ไม่เขียน output
 11. --report (#9): JSON/HTML รวมผลตัวตรวจ · ไฟล์แปลไม่ถูกแตะ · exit 1 เมื่อมี error · --check ทำให้ไม่แตรป = error
     · รายงานเก่าในโฟลเดอร์ไม่ถูกตรวจซ้ำ · เวอร์ชันในรายงาน = PluginVersion · ค่าผิด (-o/นามสกุล) = exit 2
+12. #17 ปลายทาง --report ห้ามทับไฟล์แปล: ชนไฟล์ในโฟลเดอร์ · symlink ถึงต้นฉบับ (ไฟล์/ผ่านโฟลเดอร์) · ไฟล์อื่นที่ไม่ใช่รายงาน
+    · symlink ค้าง → exit 2 และไบต์ไม่เปลี่ยน · รายงานเก่า (json/html) เขียนทับได้
 """
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -228,6 +231,42 @@ def main() -> int:
             r = run(binary, ok_csv, *args, cwd=rp_dir / "ok")
             check(f"report {' '.join(args[2:]) or args[1]}: exit 2 + ไม่เขียนอะไร",
                   r.returncode == 2 and sorted(p.name for p in (rp_dir / "ok").iterdir()) == ["ok.csv"], f"exit={r.returncode}")
+
+        # 12. #17 ปลายทางรายงานชนต้นฉบับ — เดิมตัดออกจากรายการตรวจแล้วเขียนทับเงียบ ๆ exit 0
+        g_dir = work / "guard"
+        (g_dir / "loc").mkdir(parents=True)
+        (g_dir / "out").mkdir()
+        g_src = g_dir / "loc" / "loc.json"
+        g_bytes = '{"text":"สวัสดีตอนเช้า"}\n'.encode("utf-8")
+        g_src.write_bytes(g_bytes)
+        (g_dir / "out" / "notes.html").write_text("notes", encoding="utf-8")
+        cases = [("ชนไฟล์แปลในโฟลเดอร์", ("loc", "--report", "loc/loc.json"), "ชนไฟล์แปล"),
+                 ("ไฟล์เดิมที่ไม่ใช่รายงาน", ("loc", "--report", "out/notes.html"), "ไม่ใช่รายงาน")]
+        try:
+            os.symlink(os.path.join("..", "loc", "loc.json"), g_dir / "out" / "alias.json")
+            os.symlink(os.path.join("..", "loc"), g_dir / "out" / "locdir", target_is_directory=True)
+            os.symlink("nowhere.json", g_dir / "out" / "dangling.json")
+            cases += [("symlink ถึงต้นฉบับ (input ไฟล์)", ("loc/loc.json", "--report", "out/alias.json"), "ชนไฟล์แปล"),
+                      ("symlink ถึงต้นฉบับ (input โฟลเดอร์)", ("loc", "--report", "out/alias.json"), "ชนไฟล์แปล"),
+                      ("path ผ่านโฟลเดอร์ symlink", ("loc", "--report", "out/locdir/loc.json"), "ชนไฟล์แปล"),
+                      ("symlink ค้าง", ("loc", "--report", "out/dangling.json"), "ปลายทางไม่มีอยู่")]
+        except (OSError, NotImplementedError) as e:  # Windows ที่ไม่มีสิทธิ์สร้าง symlink
+            print(f"  --  #17 ข้ามเคส symlink ({e.__class__.__name__})")
+        for name, args, msg in cases:
+            r = run(binary, *args, cwd=g_dir)
+            check(f"#17 {name}: exit 2 + ต้นฉบับไม่เปลี่ยน",
+                  r.returncode == 2 and msg in r.stderr and g_src.read_bytes() == g_bytes
+                  and (g_dir / "out" / "notes.html").read_text(encoding="utf-8") == "notes",
+                  f"exit={r.returncode} {r.stderr.strip()[-120:]}")
+        for ext in ("json", "html"):
+            r1 = run(binary, "loc", "--report", f"out/qa.{ext}", cwd=g_dir)
+            first = (g_dir / "out" / f"qa.{ext}").read_text(encoding="utf-8") if r1.returncode == 0 else ""
+            (g_dir / "out" / f"qa.{ext}").write_text(first + "OLD-REPORT-MARKER", encoding="utf-8")  # รายงานเก่า
+            r2 = run(binary, "loc", "--report", f"out/qa.{ext}", cwd=g_dir)
+            check(f"#17 สร้างรายงาน {ext} ใหม่ + เขียนทับรายงานเก่าได้",
+                  r1.returncode == 0 and r2.returncode == 0 and first != ""
+                  and "OLD-REPORT-MARKER" not in (g_dir / "out" / f"qa.{ext}").read_text(encoding="utf-8")
+                  and g_src.read_bytes() == g_bytes, f"exit={r1.returncode}/{r2.returncode}")
 
         # 6. --inplace สองรอบ + backup (แยกโฟลเดอร์เฉพาะ กัน run ตายเพราะ cp874.txt ในโฟลเดอร์เดียวกัน)
         folder = work / "inplace"

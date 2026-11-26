@@ -53,6 +53,9 @@ namespace ThaiWrap.Formats
         /// <summary>หัวไฟล์ JSON ที่ <see cref="ToJson"/> เขียนเสมอ — CLI ใช้แยกรายงานเก่าออกจากไฟล์แปลในโหมด folder</summary>
         public const string JsonHead = "{\n  \"tool\": \"thaiwrap\",";
 
+        /// <summary>meta ใน &lt;head&gt; ของ HTML — CLI ใช้ยืนยันว่าไฟล์ปลายทางเดิมเป็นรายงาน จึงเขียนทับได้ (#17)</summary>
+        public const string HtmlGenerator = "<meta name=\"generator\" content=\"thaiwrap --report\">";
+
         public string Version = "";
         public DateTime GeneratedUtc = DateTime.UtcNow;
         public string Input = "";
@@ -247,6 +250,7 @@ namespace ThaiWrap.Formats
             var sb = new StringBuilder();
             int err = Count(QaSeverity.Error), warn = Count(QaSeverity.Warning), info = Count(QaSeverity.Info);
             sb.Append("<!doctype html>\n<html lang=\"th\">\n<head>\n<meta charset=\"utf-8\">\n")
+              .Append(HtmlGenerator).Append('\n')
               .Append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
               .Append("<title>รายงาน QA thaiwrap</title>\n<style>\n").Append(Css).Append("</style>\n</head>\n<body>\n<main>\n");
             sb.Append("<h1>รายงาน QA</h1>\n<p class=\"meta\">").Append(H(Input)).Append(" · thaiwrap ").Append(H(Version))

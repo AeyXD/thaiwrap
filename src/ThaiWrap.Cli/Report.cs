@@ -33,13 +33,63 @@ namespace ThaiWrap.Cli
                 return "--report ไม่เขียนไฟล์แปล — ใช้ร่วม -o/--inplace ไม่ได้ (จะแปลงไฟล์ให้รันอีกครั้งโดยไม่ใส่ --report)";
             if (ReportKind(r) == null) return "--report ต้องลงท้าย .json หรือ .html (หรือ - = JSON ออก stdout) ได้รับ: " + r;
             if (!File.Exists(cfg.InputPath) && !Directory.Exists(cfg.InputPath)) return "ไม่พบ input: " + cfg.InputPath;
-            if (r != "-" && File.Exists(cfg.InputPath) && SamePath(r, cfg.InputPath))
-                return "--report ชี้ไปที่ไฟล์ input เอง (จะเขียนทับไฟล์แปล): " + r;
+            return r == "-" ? null : ValidateReportTarget(cfg, r);
+        }
+
+        /// <summary>
+        /// #17: ปลายทางรายงานต้องไม่ใช่ไฟล์แปล — เทียบหลังตาม symlink จนสุด (alias ถึงต้นฉบับก็ห้าม) กับทุกไฟล์ที่จะตรวจ
+        /// และถ้ามีไฟล์อยู่แล้วต้องเป็นรายงานของ thaiwrap เท่านั้นจึงเขียนทับได้ (เดิมตัดปลายทางออกจากรายการตรวจแล้วเขียนทับเงียบ ๆ)
+        /// </summary>
+        private static string? ValidateReportTarget(Config cfg, string r)
+        {
+            if (Directory.Exists(r)) return "--report ชี้ไปที่โฟลเดอร์: " + r + " (ระบุชื่อไฟล์ .json/.html)";
+            var link = new FileInfo(r);
+            // File.Exists ของ symlink ที่ปลายทางหายคืน true บน macOS (ดูที่ตัวลิงก์) — ต้องดูปลายทางจริง
+            if (link.LinkTarget != null && !(link.ResolveLinkTarget(true) is FileInfo real && real.Exists))
+                return "--report เป็น symlink ที่ปลายทางไม่มีอยู่: " + r + " → " + link.LinkTarget;
+            string target = RealPath(r);
+            var inputs = Directory.Exists(cfg.InputPath) ? ListFolder(cfg) : new List<string> { cfg.InputPath! };
+            foreach (var f in inputs)
+                if (string.Equals(RealPath(f), target, StringComparison.OrdinalIgnoreCase))
+                    return "--report ชนไฟล์แปลที่กำลังตรวจ (จะเขียนทับต้นฉบับ): " + r +
+                        (SamePathText(f, r) ? "" : " = " + f) + " — ใช้ชื่ออื่นหรือเขียนรายงานนอกโฟลเดอร์ที่ตรวจ";
+            if (File.Exists(r) && !IsQaReportOutput(r))
+                return "--report: มีไฟล์ " + r + " อยู่แล้วและไม่ใช่รายงานของ thaiwrap — ไม่เขียนทับ (ลบเองหรือใช้ชื่ออื่น)";
             return null;
         }
 
-        private static bool SamePath(string a, string b) =>
+        private static bool SamePathText(string a, string b) =>
             string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>path จริงหลังตาม symlink จนสุด (ไฟล์ที่ยังไม่มี = full path เดิม)</summary>
+        private static string RealPath(string p)
+        {
+            var fi = new FileInfo(Path.GetFullPath(p));
+            string full = fi.LinkTarget != null ? fi.ResolveLinkTarget(true)?.FullName ?? fi.FullName : fi.FullName;
+            // โฟลเดอร์แม่ที่เป็น symlink (เช่น /tmp → /private/tmp บน macOS) — resolve ทีละชั้นจากบนลงล่าง
+            string? dir = Path.GetDirectoryName(full);
+            if (dir == null) return full;
+            return Path.Combine(RealDir(dir), Path.GetFileName(full));
+        }
+
+        private static string RealDir(string dir)
+        {
+            string? parent = Path.GetDirectoryName(dir);
+            string resolved = parent == null ? dir : Path.Combine(RealDir(parent), Path.GetFileName(dir));
+            var di = new DirectoryInfo(resolved);
+            if (di.Exists && di.LinkTarget != null) return di.ResolveLinkTarget(true)?.FullName ?? resolved;
+            return resolved;
+        }
+
+        /// <summary>ไฟล์ที่ --report เคยเขียน (JSON ขึ้นต้น JsonHead · HTML มี generator meta) — เขียนทับได้</summary>
+        private static bool IsQaReportOutput(string path)
+        {
+            var head = new byte[600];
+            int n;
+            using (var fs = File.OpenRead(path)) n = fs.Read(head, 0, head.Length);
+            string s = Encoding.UTF8.GetString(head, 0, n).TrimStart('\uFEFF');
+            return s.StartsWith(QaReport.JsonHead, StringComparison.Ordinal) || s.Contains(QaReport.HtmlGenerator);
+        }
 
         private static string ToolVersion()
         {
@@ -65,9 +115,8 @@ namespace ThaiWrap.Cli
             if (cfg.Normalize) Set("normalize", "on");
             if (cfg.Check) Set("check", "on — ไฟล์ที่ยังไม่แตรปนับเป็น error");
 
+            // ปลายทางที่ชนไฟล์แปลถูกปฏิเสธแล้วใน ValidateReport (#17) · รายงาน JSON เก่าในโฟลเดอร์ ListFolder ข้ามให้เอง
             List<string> files = Directory.Exists(cfg.InputPath) ? ListFolder(cfg) : new List<string> { cfg.InputPath! };
-            // รายงาน .json ที่เขียนลงในโฟลเดอร์ที่ตรวจ ต้องไม่ถูกตรวจเป็นไฟล์แปลในรอบถัดไป
-            if (cfg.Report != "-") files.RemoveAll(f => SamePath(f, cfg.Report!));
 
             var unknown = new Dictionary<string, int>();
             var checks = new List<CheckEntry>();
