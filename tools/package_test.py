@@ -10,6 +10,7 @@
  4. csv: record ว่างท้ายไฟล์ ("") ไม่หาย ไปกลับครบ · field ที่ไม่แตะคง quote เดิม + --check ไม่ฟ้องผิด
  5. hairspace: แทรก U+200A ไม่ปน ZWSP + สถิติรายงาน hairspace+N
  6. --inplace สองรอบ: .bak เก็บต้นฉบับไว้ + รอบสองข้ามไฟล์
+ 7. --placeholders: placeholder หาย/เกิน → exit 1 + รายงานแถว · ถูกครบ → exit 0 · ไม่เขียนไฟล์
 """
 import json
 import shutil
@@ -103,6 +104,20 @@ def main() -> int:
         check("hairspace: แทรก U+200A ไม่ปน ZWSP", HAIR in hs_out and ZWSP not in hs_out)
         check("hairspace: สถิติรายงานตามตัวที่เลือก", "hairspace+" in r.stderr and "hairspace+0" not in r.stderr,
               r.stderr.strip().splitlines()[-1] if r.stderr else "")
+
+        # 7. --placeholders (ไม่ต้องใช้ word list · ไม่เขียนไฟล์)
+        ph_dir = work / "ph"
+        ph_dir.mkdir()
+        ph = ph_dir / "ph.csv"
+        ph.write_text("id,en,thai\nitem_01,You found {0} gold,คุณพบทอง {gold} เหรียญ\n"
+                      "item_02,Deals {0} to <b>{1}</b>,สร้าง {0} แก่ <b>{1}</b>\n", encoding="utf-8")
+        r = run(binary, ph, "--placeholders", cwd=work)
+        check("placeholders: พบจุดผิด exit 1 + รายงานแถว 2", r.returncode == 1 and "แถว 2" in r.stderr and "{gold}" in r.stderr,
+              f"exit={r.returncode}")
+        ph.write_text("id,en,thai\nitem_02,Deals {0} to <b>{1}</b>,สร้าง {0} แก่ <b>{1}</b>\n", encoding="utf-8")
+        r = run(binary, ph, "--placeholders", cwd=work)
+        check("placeholders: ถูกครบ exit 0 + ไม่สร้างไฟล์", r.returncode == 0 and sorted(p.name for p in ph_dir.iterdir()) == ["ph.csv"],
+              f"exit={r.returncode}")
 
         # 6. --inplace สองรอบ + backup (แยกโฟลเดอร์เฉพาะ กัน run ตายเพราะ cp874.txt ในโฟลเดอร์เดียวกัน)
         folder = work / "inplace"

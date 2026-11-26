@@ -616,6 +616,46 @@ namespace ThaiWrap.Tests
             Check("csv: identity transform = ไบต์เดิม (หลายบรรทัด/quote ค้างท้ายไฟล์)",
                 CsvProcessor.Process(multi, new CsvOptions { ColumnIndices = new List<int> { 1, 2 } }, s => s) == multi);
 
+            Console.WriteLine("== placeholders ==");
+            {
+                Func<string, string, string> cmp = (en, th) =>
+                {
+                    var m = PlaceholderChecker.Compare(en, th);
+                    return m == null ? "ok" : "-" + string.Join("|", m.Missing) + " +" + string.Join("|", m.Extra);
+                };
+                Check("ph: ตรงกัน (สลับตำแหน่งได้)", cmp("Hello %1$s and %2$s", "สวัสดี %2$s และ %1$s") == "ok");
+                Check("ph: {0} หาย", cmp("You found {0} gold", "คุณพบทอง") == "-{0} +");
+                Check("ph: แปลชื่อ placeholder เป็นไทย = {name} หาย", cmp("Hi {name}", "สวัสดี {ชื่อ}") == "-{name} +");
+                Check("ph: สะกดชื่อ placeholder ผิด = หาย+เกิน", cmp("Hi {name}", "สวัสดี {nmae}") == "-{name} +{nmae}");
+                Check("ph: tag ปิดผิด", cmp("<b>Warning</b>", "<b>คำเตือน<b>") == "-</b> +<b>");
+                Check("ph: tag สะกดผิด", cmp("<color=red>Fire</color>", "<colour=red>ไฟ</color>") == "-<color=red> +<colour=red>");
+                Check("ph: นับจำนวนซ้ำ", cmp("HP: %d/%d", "พลังชีวิต: %d") == "-%d +");
+                Check("ph: %% และ 100% sure ไม่ใช่ placeholder", cmp("100% sure, 50%% off", "มั่นใจ 100% ลด 50%%") == "ok");
+                Check("ph: printf width/precision/length", PlaceholderChecker.Describe(PlaceholderChecker.Extract("%5.2f %-3d %ld %llu %.*s %@")) == "%5.2f, %-3d, %ld, %llu, %.*s, %@");
+                Check("ph: ZWSP ที่แทรกแล้วไม่มีผล", cmp("Deals {0} damage to <i>{1}</i>",
+                    seg.InsertZwsp("สร้างความเสียหาย {0} แก่ <i>{1}</i> ทันที")) == "ok");
+                Check("ph: [วงเล็บเหลี่ยม] ไม่นับ", cmp("[Press E] to open", "[กด E] เพื่อเปิด") == "ok");
+                // กฎจากคลังจริง W3 94k คู่ (2026-11-26): 2,527 จุด → 312 จุดที่เกือบทั้งหมดเป็นบั๊กจริง
+                Check("ph: <br> เพิ่ม/ลดเพื่อจัดบรรทัดไม่นับ", cmp("Line one<br>line two", "บรรทัดหนึ่ง<BR>บรรทัด<br/>สอง") == "ok");
+                Check("ph: <br > / < br> รูปเพี้ยนยังนับ", cmp("A<br>B", "ก<br >ข< br>ค") == "- +<br >|< br>");
+                Check("ph: แท็กแทรกช่องว่าง (เกมไม่รู้จัก) จับได้", cmp("Press <<GUI_Select> to buy", "กด << GUI_Select > เพื่อซื้อ") == "-<<GUI_Select> +<< GUI_Select >");
+                Check("ph: แท็ก <br ไม่ปิดกินข้อความ จับได้", cmp("Item", "<brไอเทมของ<br>").StartsWith("- +<brไอเทม"));
+                Check("ph: {ถ้อยคำ} ไม่ใช่ placeholder (W3 Elder Speech/ท่าทาง)",
+                    cmp("{shakes his head} No.", "{ส่ายหัว} ไม่") == "ok" && cmp("{Hrrrr..} Fine.", "{เฮ้อออ} ก็ได้") == "ok" &&
+                    cmp("{*Whistles*}", "{*ผิวปาก*}") == "ok");
+                Check("ph: {placeholder} แบบต่าง ๆ ยังนับ", PlaceholderChecker.Describe(PlaceholderChecker.Extract(
+                    "{0} {name} {0:N2} {player.name} {color=#f00} {/color} {{ }")) == "{0}, {name}, {0:N2}, {player.name}, {color=#f00}, {/color}");
+                Check("ph: ตัวปิดต้องอยู่บรรทัดเดียวกัน", PlaceholderChecker.Extract("a {b\nc} d").Count == 0);
+                Check("ph: ต้นฉบับต้องดูเป็นถ้อยคำ", PlaceholderChecker.LooksLikeSource("Deals {0} damage") &&
+                    PlaceholderChecker.LooksLikeSource("{0}") && !PlaceholderChecker.LooksLikeSource("item_sword_01") &&
+                    !PlaceholderChecker.LooksLikeSource("ดาบ {0}") && !PlaceholderChecker.LooksLikeSource("Start"));
+                Check("ph: Describe รวมตัวซ้ำ", PlaceholderChecker.Describe(new[] { "{0}", "<b>", "{0}" }) == "{0} ×2, <b>");
+                // ตัวตัดคำใช้นิยามเดียวกัน — ไม่แทรกในส่วนควบคุมที่ตัวตรวจนับ
+                string wrapped = seg.InsertZwsp("ยินดีต้อนรับ{player_name}สู่<color=red>ดินแดนมังกร</color>");
+                Check("ph: segmenter ไม่แทรกใน {…}/<…> ที่ตัวตรวจนับ",
+                    PlaceholderChecker.Extract(wrapped).SequenceEqual(new[] { "{player_name}", "<color=red>", "</color>" }), wrapped);
+            }
+
             Console.WriteLine("== segmentation coverage ==");
             var allTokens = new List<Token>();
             foreach (var line in lines) allTokens.AddRange(seg.Tokenize(line));

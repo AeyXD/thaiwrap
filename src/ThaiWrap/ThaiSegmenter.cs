@@ -535,21 +535,15 @@ namespace ThaiWrap
             int i = 0, n = text.Length;
             while (i < n)
             {
-                char c = text[i];
-                if (c == '{' || c == '<')
+                int j = PlaceholderChecker.FindControlEnd(text, i);
+                if (j >= 0) // {…} / <…> ที่ตัวปิดอยู่บรรทัดเดียวกัน → mask ทั้งช่วง
                 {
-                    char close = c == '{' ? '}' : '>';
-                    int j = i + 1;
-                    while (j < n && text[j] != close && text[j] != '\n' && text[j] != '\r') j++;
-                    if (j < n && text[j] == close) // พบตัวปิดในบรรทัดเดียวกัน → mask ทั้งช่วง
-                    {
-                        if (sb.Length > 0) { parts.Add(new ControlPart { Text = sb.ToString() }); sb.Length = 0; }
-                        parts.Add(new ControlPart { Text = text.Substring(i, j - i + 1), Masked = true });
-                        i = j + 1;
-                        continue;
-                    }
+                    if (sb.Length > 0) { parts.Add(new ControlPart { Text = sb.ToString() }); sb.Length = 0; }
+                    parts.Add(new ControlPart { Text = text.Substring(i, j - i + 1), Masked = true });
+                    i = j + 1;
+                    continue;
                 }
-                sb.Append(c);
+                sb.Append(text[i]);
                 i++;
             }
             if (sb.Length > 0) parts.Add(new ControlPart { Text = sb.ToString() });

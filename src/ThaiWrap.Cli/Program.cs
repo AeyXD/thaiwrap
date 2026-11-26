@@ -30,6 +30,7 @@ namespace ThaiWrap.Cli
             public bool InPlace;
             public bool Normalize;
             public bool Mispaste;
+            public bool Placeholders;
             public bool Check;
             public int MaxDiff = 40;
             public bool Stats;
@@ -86,6 +87,7 @@ namespace ThaiWrap.Cli
         {
             // โหมดตรวจ "วางคำแปลผิดแถว" — ไม่ต้องใช้ word list (ตรวจโครงสร้างตารางล้วนๆ) ทำก่อนอื่น
             if (cfg.Mispaste) return RunMispaste(cfg);
+            if (cfg.Placeholders) return RunPlaceholders(cfg);
 
             cfg.WordList = ResolveWordList(cfg);
             if (!File.Exists(cfg.WordList))
@@ -191,6 +193,142 @@ namespace ThaiWrap.Cli
             return 0;
         }
 
+        /// <summary>ข้อความแปลหนึ่งชิ้นคู่กับต้นฉบับ สำหรับ --placeholders</summary>
+        private sealed class SourcePair
+        {
+            public string Source = "", Translation = "";
+            public int Line;
+            public bool IsRow;
+        }
+
+        /// <summary>
+        /// ตรวจส่วนควบคุมของเกม ({0} %s &lt;tag&gt;) ในคำแปลเทียบต้นฉบับ — รายงานอย่างเดียว ไม่แก้ไฟล์ ไม่ต้องใช้ word list
+        /// · exit 1 เมื่อพบจุดผิด (ใช้เป็น lint ใน CI ได้แบบ --check) · ฟอร์แมตที่ไม่มีต้นฉบับคู่ (json/text) ถูกข้ามพร้อมบอก
+        /// </summary>
+        private static int RunPlaceholders(Config cfg)
+        {
+            if (cfg.InputPath == null)
+            {
+                Console.Error.WriteLine("--placeholders ใช้กับไฟล์/โฟลเดอร์ (ไม่ใช่ stdin)");
+                return 2;
+            }
+            List<string> files;
+            if (Directory.Exists(cfg.InputPath))
+            {
+                var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".csv", ".tsv", ".json", ".po", ".pot", ".txt" };
+                files = Directory.EnumerateFiles(cfg.InputPath, "*",
+                        cfg.Recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly)
+                    .Where(p => exts.Contains(Path.GetExtension(p)))
+                    .Where(p => !p.Contains(".zwsp.") && !p.EndsWith(".bak", StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(p => p, StringComparer.Ordinal)
+                    .ToList();
+            }
+            else if (File.Exists(cfg.InputPath)) files = new List<string> { cfg.InputPath };
+            else
+            {
+                Console.Error.WriteLine("ไม่พบ input: " + cfg.InputPath);
+                return 2;
+            }
+
+            int pairs = 0, noSource = 0, found = 0;
+            var unsupported = new List<string>();
+            foreach (var file in files)
+            {
+                string format = ResolveFormat(cfg, file) ?? "";
+                if (format != "csv" && format != "tsv" && format != "po" && format != "keyvalue")
+                {
+                    unsupported.Add(file);
+                    continue;
+                }
+                (string input, _) = ReadTextWithBom(file);
+                foreach (var p in BuildSourcePairs(input, format, ref noSource))
+                {
+                    pairs++;
+                    var m = PlaceholderChecker.Compare(p.Source, p.Translation);
+                    if (m == null) continue;
+                    found++;
+                    var why = new List<string>();
+                    if (m.Missing.Count > 0) why.Add("หาย " + PlaceholderChecker.Describe(m.Missing));
+                    if (m.Extra.Count > 0) why.Add("เกิน " + PlaceholderChecker.Describe(m.Extra));
+                    Console.Error.WriteLine("  " + file + (p.IsRow ? " แถว " : ":") + p.Line + " — " + string.Join(" · ", why));
+                    Console.Error.WriteLine("    EN: " + Clip(OneLine(p.Source), 90));
+                    Console.Error.WriteLine("    TH: " + Clip(OneLine(p.Translation), 90));
+                }
+            }
+
+            Console.Error.WriteLine("--- ตรวจ placeholder/tag เทียบต้นฉบับ: " + (files.Count - unsupported.Count) + " ไฟล์ · เทียบ " + pairs +
+                " คู่ · พบ " + found + " จุด" + (noSource > 0 ? " · ตรวจไม่ได้ " + noSource + " ข้อความ (มี placeholder แต่หาต้นฉบับในแถว/key ไม่ได้)" : ""));
+            if (unsupported.Count > 0)
+                Console.Error.WriteLine("ข้าม " + unsupported.Count + " ไฟล์ที่ไม่มีต้นฉบับคู่ในไฟล์ (json/text — รองรับ csv/tsv/po และ -f keyvalue)");
+            if (found > 0)
+            {
+                Console.Error.WriteLine("ตรวจไม่ผ่าน: แก้ที่ไฟล์แปลต้นทาง — placeholder ต้องเหมือนต้นฉบับทุกตัวอักษร (สลับตำแหน่งได้)");
+                return 1;
+            }
+            return 0;
+        }
+
+        private static string OneLine(string s) =>
+            s.Replace("\r\n", " ⏎ ").Replace("\n", " ⏎ ").Replace("\r", " ⏎ ");
+
+        /// <summary>
+        /// คู่ต้นฉบับ–คำแปล: csv/tsv = เซลล์ไทยมากสุด กับเซลล์ที่ดูเป็นถ้อยคำอังกฤษ (<see cref="PlaceholderChecker.LooksLikeSource"/>)
+        /// ที่มีอักษรละตินมากสุด — ไม่ใช้ตัวเลือกของ --mispaste ตรง ๆ เพราะคอลัมน์ ID ยาว ๆ จะถูกเลือกแล้วฟ้อง "เกิน" ผิด ·
+        /// po = msgid/msgstr (msgstr ว่าง = ยังไม่แปล ข้าม) · keyvalue = key/ค่า เฉพาะ key ที่ดูเป็นถ้อยคำ (แบบ XUnity)
+        /// </summary>
+        private static List<SourcePair> BuildSourcePairs(string input, string format, ref int noSource)
+        {
+            var list = new List<SourcePair>();
+            switch (format)
+            {
+                case "csv":
+                case "tsv":
+                {
+                    var table = CsvProcessor.ParseTable(input, format == "tsv" ? '\t' : DetectCsvDelimiter(input));
+                    for (int r = 0; r < table.Count; r++)
+                    {
+                        MispasteDetector.PickThaiEnglish(table[r], out string? thai, out _);
+                        if (thai == null) continue;
+                        string? src = null;
+                        int best = 0;
+                        foreach (var cell in table[r])
+                        {
+                            if (ReferenceEquals(cell, thai) || !PlaceholderChecker.LooksLikeSource(cell)) continue;
+                            int lat = cell.Count(c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'));
+                            if (lat > best) { best = lat; src = cell; }
+                        }
+                        if (src == null) { if (PlaceholderChecker.Extract(thai).Count > 0) noSource++; continue; }
+                        list.Add(new SourcePair { Source = src, Translation = thai, Line = r + 1, IsRow = true });
+                    }
+                    break;
+                }
+                case "po":
+                    foreach (var e in PoProcessor.ParseEntries(input))
+                    {
+                        if (e.MsgStr.Length == 0) continue;
+                        list.Add(new SourcePair { Source = e.MsgId, Translation = e.MsgStr, Line = e.Line });
+                    }
+                    break;
+                case "keyvalue":
+                {
+                    int lineNo = 0;
+                    foreach (var line in TextLines.SplitKeepTerminators(input))
+                    {
+                        lineNo++;
+                        string content = TextLines.StripTerminator(line, out _);
+                        int eq = content.IndexOf('=');
+                        if (eq <= 0 || content.TrimStart().StartsWith("#", StringComparison.Ordinal)) continue;
+                        string key = content.Substring(0, eq);
+                        string value = content.Substring(eq + 1);
+                        if (!PlaceholderChecker.LooksLikeSource(key)) { if (PlaceholderChecker.Extract(value).Count > 0) noSource++; continue; }
+                        list.Add(new SourcePair { Source = key, Translation = value, Line = lineNo });
+                    }
+                    break;
+                }
+            }
+            return list;
+        }
+
         private static string Clip(string s, int max) =>
             s.Length <= max ? s : s.Substring(0, max) + "…";
 
@@ -253,6 +391,7 @@ namespace ThaiWrap.Cli
                     case "--maxword": cfg.Options.MaxWordLength = ParseInt(args, ref i, 0); break;
                     case "--unknown-threshold": cfg.Options.UnknownBreakThreshold = ParseInt(args, ref i, 1); break;
                     case "--mispaste": cfg.Mispaste = true; break;
+                    case "--placeholders": cfg.Placeholders = true; break;
                     case "--check": cfg.Check = true; break;
                     case "--stats": cfg.Stats = true; break;
                     case "--help":
@@ -835,6 +974,8 @@ namespace ThaiWrap.Cli
             "  --maxword <n>         ความยาวคำสูงสุดจากพจนานุกรม (default 0 = ไม่จำกัด)\n" +
             "  --unknown-threshold <n> จำนวน cluster ก่อนยอมให้ตัดคำนอกพจนานุกรม (default 8)\n" +
             "  --mispaste           รายงานแถวที่คำแปลน่าจะวางผิดแถว (copy ของแถวอื่น) — csv/tsv, ข้อเสนออย่างเดียว\n" +
+            "  --placeholders       ตรวจ {0} %s <tag> ในคำแปลเทียบต้นฉบับ (หาย/เกิน/สะกดผิด) — csv/tsv/po/keyvalue\n" +
+            "                       ไม่เขียนไฟล์ · exit 1 ถ้าพบ (ใช้ใน CI ได้) · ไฟล์หรือโฟลเดอร์ (+ -r)\n" +
             "  --check              โหมดตรวจแบบ lint: ไม่เขียนอะไร exit 1 ถ้ายังมีข้อความไทยไม่ถูกแตรป — ใช้ใน CI/pre-commit\n" +
             "  --stats               สถิติเพิ่มเติมทาง stderr";
     }

@@ -23,6 +23,7 @@ dotnet run --project tests/ThaiWrap.Tests -- data/words_th.txt  # เทส — 
 dotnet run --project src/ThaiWrap.Cli -- samples/game_sentences.txt -m sep
 dotnet run --project src/ThaiWrap.Cli -- tests/samples/items.csv --columns thai --dry-run
 dotnet run --project src/ThaiWrap.Cli -- tests/samples/items.csv --mispaste   # ตรวจวางผิดแถว (csv/tsv)
+dotnet run --project src/ThaiWrap.Cli -- tests/samples -r --placeholders; echo $? # {0} %s <tag> เทียบต้นฉบับ: exit 1 ถ้าพบ
 dotnet run --project src/ThaiWrap.Cli -- data/ -r --check ; echo $?           # lint: exit 1 ถ้าไทยยังไม่แตรป
 
 ./tools/fetch-bepinex.sh                       # ครั้งแรก — ดาวน์โหลด BepInEx refs (lib/ ไม่ commit)
@@ -47,6 +48,7 @@ dotnet build src/ThaiWrap.BepInEx -c Release   # plugin — ต้อง 0 warni
 | `src/ThaiWrap/ThaiSegmenter.cs` | หัวใจ: DP optimal segmentation + trie + กฎพยัญชนะทวิภาค + วลีห้ามตัด (nobreak) + รวม `words_extra` |
 | `src/ThaiWrap/ThaiEnglishSense.cs` | ตัดข้อเสนอของตัวตรวจคำผิดด้วยต้นฉบับอังกฤษ (พอร์ต en_sense.py ของ W3) — CLI หาคู่อังกฤษจาก csv/tsv (เซลล์ละตินมากสุด) · po msgid · key=value · ข้อความที่มีตัวเลข/ขีดล่างไม่นับเป็นอังกฤษ (กันคอลัมน์ ID ซ่อนคำผิดจริง) |
 | `src/ThaiWrap/ThaiContextChecker.cs` | ตัวตรวจคำผิดตามบริบทใน `--stats` (ร↔ล + สะกดถูกแต่ผิดบริบท) — พอร์ต find_ral_swaps / find_wrong_word ของ W3 ผลตรง Python ทุกจุดบนคลัง W3 · ข้อยกเว้นเฉพาะเกมอยู่ใน `check_allow.txt` ของโปรเจกต์ ไม่ใส่ในโค้ด |
+| `src/ThaiWrap/PlaceholderChecker.cs` | `--placeholders` เทียบ `{…}` `<…>` printf ในคำแปลกับต้นฉบับ (multiset ไม่สนลำดับ) · `FindControlEnd` เป็นนิยามส่วนควบคุมที่ใช้ร่วมกับ `SplitControlParts` ของตัวตัดคำ — แก้ที่เดียว |
 | `src/ThaiWrap/ThaiNormalizer.cs` | `--normalize` ยุบรูปพิมพ์ผิด (เเ→แ, มาร์คซ้อน/ลำดับผิด) |
 | `src/ThaiWrap/ThaiChunker.cs` | รวมคำเป็นกลุ่มวลีสำหรับโหมด space (พอร์ตจาก ThaiW1Setup) |
 | `src/ThaiWrap.Formats/` | parser csv/tsv/json/po/keyvalue — อนุรักษ์เดิม · `MispasteDetector` (--mispaste) |
@@ -55,7 +57,7 @@ dotnet build src/ThaiWrap.BepInEx -c Release   # plugin — ต้อง 0 warni
 | `tests/ThaiWrap.Tests/` | invariant + ชุดประโยคเกม — 193 checks ณ v0.11.1 (console runner) |
 | `data/words_th.txt` | พจนานุกรม (65,758 คำ ณ v0.11.1) |
 | `nobreak.txt` · `words_extra.txt` · `check_allow.txt` | วลีห้ามตัด · คำเฉพาะเกม · ข้อยกเว้นตัวตรวจคำผิด — ไฟล์ของผู้ใช้ วางข้าง word list (ไม่อยู่ใน repo) |
-| `web/` | หน้าทดสอบ visual — `thaiwrap.js` เป็น **JS port ของ core** ตรงกับ C# ณ v0.11.1 ทุกตัวเลือกตัดคำ (ไม่รวม `--stats`/ร↔ล/mispaste) · ตรวจ parity ใน CI ด้วย `tools/js-parity.sh` · push `web/**` = deploy GitHub Pages อัตโนมัติ |
+| `web/` | หน้าทดสอบ visual — `thaiwrap.js` เป็น **JS port ของ core** ตรงกับ C# ณ v0.11.1 ทุกตัวเลือกตัดคำ (ไม่รวม `--stats`/ร↔ล/mispaste/placeholders) · ตรวจ parity ใน CI ด้วย `tools/js-parity.sh` · push `web/**` = deploy GitHub Pages อัตโนมัติ |
 | `tools/` | `publish.sh` (rebuild `publish/` 3 RID · `--zip` = zip CLI ไว้แนบ Release) · `package-plugin.sh` (zip plugin) · `fetch-bepinex.sh` (refs สำหรับ build plugin) · `js-parity.sh` · patch ฟอนต์ · ทดสอบ Godot |
 | `publish/` | binary single-file ของ CLI ต่อ RID (commit ไว้ใน repo) |
 | `docs/COMPATIBILITY.md` | ความเข้ากันได้เอนจิน/ฟอนต์ (ZWSP vs hairspace · NBSP สำหรับวลีห้ามตัด) |
