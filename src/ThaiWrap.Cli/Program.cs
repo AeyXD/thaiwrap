@@ -250,7 +250,10 @@ namespace ThaiWrap.Cli
                     continue;
                 }
                 (string input, _) = ReadTextWithBom(file);
-                foreach (var p in BuildSourcePairs(cfg, input, format, ref noSource))
+                List<SourcePair> filePairs;
+                try { filePairs = BuildSourcePairs(cfg, input, format, ref noSource); }
+                catch (ArgumentException ex) { throw new ArgumentException(file + ": " + ex.Message); }
+                foreach (var p in filePairs)
                 {
                     pairs++;
                     var m = PlaceholderChecker.Compare(p.Source, p.Translation);
@@ -531,7 +534,9 @@ namespace ThaiWrap.Cli
             }
 
             (string input, Encoding enc) = ReadTextWithBom(path);
-            string output = ProcessContent(input, format, cfg, transform);
+            string output;
+            try { output = ProcessContent(input, format, cfg, transform); }
+            catch (ArgumentException ex) { throw new ArgumentException(path + ": " + ex.Message); } // ตัวเลือกไม่เข้ากับไฟล์นี้ — บอกว่าไฟล์ไหน
 
             bool changed = output != input;
             char brk = cfg.Options.BreakChar;
@@ -885,7 +890,7 @@ namespace ThaiWrap.Cli
         /// คอลัมน์คำแปล/ต้นฉบับของโหมดตรวจ csv/tsv: --columns (คำแปล) + --source-column (ต้นฉบับ) — ไม่ระบุ = เดาจากเนื้อหา
         /// </summary>
         private static TableColumns ResolveTableColumns(Config cfg, List<List<string>> table) =>
-            TableColumns.Resolve(cfg.Columns, cfg.SourceColumn, table.Count > 0 ? table[0] : null);
+            TableColumns.Resolve(cfg.Columns, cfg.SourceColumn, table.Count > 0 ? table[0] : null, TableColumns.Width(table));
 
         /// <summary>--json-path "/items/*/desc" → แปลงเฉพาะ value ที่ path ตรง (null = ไม่กรองตาม path)</summary>
         private static Func<IReadOnlyList<string>, bool>? BuildJsonPathFilter(Config cfg)

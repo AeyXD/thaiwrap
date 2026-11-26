@@ -52,7 +52,13 @@ namespace ThaiWrap.Formats
 
         private static List<int> ResolveTargetColumns(List<Record> records, CsvOptions options)
         {
-            if (options.ColumnIndices != null) return new List<int>(options.ColumnIndices);
+            if (options.ColumnIndices != null)
+            {
+                int maxWidth = 0;
+                foreach (var r in records) maxWidth = Math.Max(maxWidth, r.Fields.Count);
+                foreach (int c in options.ColumnIndices) TableColumns.CheckWidth("--columns", c, maxWidth); // #16 เลขเกินตาราง = error ไม่ใช่ข้ามเงียบ
+                return new List<int>(options.ColumnIndices);
+            }
             if (options.ColumnNames != null && records.Count > 0)
             {
                 var result = new List<int>();

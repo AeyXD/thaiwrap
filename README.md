@@ -168,7 +168,7 @@ csv/tsv ที่เดาคอลัมน์ต้นฉบับผิด (�
   (อ่าน/เขียน 5 ฟอร์แมตแบบอนุรักษ์เดิม) · `src/ThaiWrap.Cli` · `src/ThaiWrap.BepInEx` —
   core และ plugin เขียนด้วย API เก่า ๆ ที่มีในทุก .NET ไม่มี dependency ภายนอก (plugin อ้าง
   Unity/BepInEx ตอน compile เท่านั้น)
-- เทส 240 ข้อ ณ หลัง v0.12.1 (เลือก field/คอลัมน์เอง · invariant + ประโยคเกมจริง + ทุกฟอร์แมต + ความปลอดภัยไฟล์ + normalize +
+- เทส 242 ข้อ ณ หลัง v0.12.1 (เลือก field/คอลัมน์เอง · invariant + ประโยคเกมจริง + ทุกฟอร์แมต + ความปลอดภัยไฟล์ + normalize +
   กลุ่มวลี + nobreak + ไม้ยมก + ตัวตรวจคำผิดตามบริบท + กรองด้วยต้นฉบับอังกฤษ + placeholder) · CI รันบน ubuntu + windows จริง รวมทดสอบ binary ที่แพ็กแล้ว และเทียบผล
   `web/thaiwrap.js` กับ CLI (`tools/js-parity.sh`)
 

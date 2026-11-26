@@ -25,8 +25,10 @@ namespace ThaiWrap.Formats
         /// <param name="translationSpec">ค่า --columns เช่น "3" "thai" "th,th_short" — null = เดาเอง</param>
         /// <param name="sourceSpec">ค่า --source-column (คอลัมน์เดียว) — null = เดาเอง</param>
         /// <param name="header">แถวแรกของตาราง (ใช้เมื่อสเปกเป็นชื่อ)</param>
-        /// <exception cref="ArgumentException">เลขคอลัมน์ผิด/ไม่พบชื่อ/ต้นฉบับซ้ำกับคอลัมน์คำแปล</exception>
-        public static TableColumns Resolve(string? translationSpec, string? sourceSpec, IReadOnlyList<string>? header)
+        /// <param name="tableWidth">จำนวนคอลัมน์ของแถวที่กว้างที่สุดในตาราง — เลขคอลัมน์ที่เกินถือว่าระบุผิด (#16:
+        /// เดิมข้ามเงียบ ๆ ทุกแถว โหมดตรวจจึงเทียบ 0 คู่แล้ว exit 0 เหมือนผ่าน) · 0 = ตารางว่าง ไม่ตรวจ</param>
+        /// <exception cref="ArgumentException">เลขคอลัมน์ผิด/เกินตาราง/ไม่พบชื่อ/ต้นฉบับซ้ำกับคอลัมน์คำแปล</exception>
+        public static TableColumns Resolve(string? translationSpec, string? sourceSpec, IReadOnlyList<string>? header, int tableWidth = 0)
         {
             var sel = new TableColumns();
             bool byName = false;
@@ -37,7 +39,7 @@ namespace ThaiWrap.Formats
                 {
                     string name = part.Trim();
                     if (name.Length == 0) continue;
-                    list.Add(ResolveOne(name, header, "--columns", ref byName));
+                    list.Add(ResolveOne(name, header, "--columns", tableWidth, ref byName));
                 }
                 if (list.Count > 0) sel.Translation = list;
             }
@@ -46,12 +48,27 @@ namespace ThaiWrap.Formats
                 string name = sourceSpec.Trim();
                 if (name.Length == 0 || name.IndexOf(',') >= 0)
                     throw new ArgumentException("--source-column ระบุได้คอลัมน์เดียว (เลข 1-based หรือชื่อ header) ได้รับ: " + sourceSpec);
-                sel.Source = ResolveOne(name, header, "--source-column", ref byName);
+                sel.Source = ResolveOne(name, header, "--source-column", tableWidth, ref byName);
                 if (sel.Translation != null && IndexOf(sel.Translation, sel.Source) >= 0)
                     throw new ArgumentException("--source-column ซ้ำกับคอลัมน์คำแปลใน --columns: " + sourceSpec);
             }
             sel.FirstDataRow = byName ? 1 : 0;
             return sel;
+        }
+
+        /// <summary>เลขคอลัมน์ (1-based) ต้องไม่เกินแถวที่กว้างที่สุด — ใช้ร่วมกับ --columns ของโหมดแปลง (CsvProcessor)</summary>
+        public static void CheckWidth(string opt, int column, int tableWidth)
+        {
+            if (tableWidth > 0 && column > tableWidth)
+                throw new ArgumentException(opt + " " + column + ": ตารางมีแค่ " + tableWidth + " คอลัมน์ (ใช้ได้ 1–" + tableWidth + " หรือชื่อ header)");
+        }
+
+        /// <summary>จำนวนคอลัมน์ของแถวที่กว้างที่สุด</summary>
+        public static int Width(IEnumerable<IReadOnlyList<string>> rows)
+        {
+            int w = 0;
+            foreach (var r in rows) if (r.Count > w) w = r.Count;
+            return w;
         }
 
         private static int IndexOf(IReadOnlyList<int> list, int value)
@@ -60,7 +77,7 @@ namespace ThaiWrap.Formats
             return -1;
         }
 
-        private static int ResolveOne(string name, IReadOnlyList<string>? header, string opt, ref bool byName)
+        private static int ResolveOne(string name, IReadOnlyList<string>? header, string opt, int tableWidth, ref bool byName)
         {
             bool digits = true;
             foreach (char c in name) if (c < '0' || c > '9') { digits = false; break; }
@@ -68,6 +85,7 @@ namespace ThaiWrap.Formats
             {
                 if (!int.TryParse(name, out int col) || col < 1)
                     throw new ArgumentException(opt + " หมายเลขคอลัมน์เริ่มที่ 1 ได้รับ: " + name);
+                CheckWidth(opt, col, tableWidth);
                 return col - 1;
             }
             byName = true;

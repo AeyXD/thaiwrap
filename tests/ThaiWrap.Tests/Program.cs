@@ -565,6 +565,13 @@ namespace ThaiWrap.Tests
                 Check("columns: error — ชื่อไม่พบ · เลข 0 · ต้นฉบับซ้ำคำแปล · หลายคอลัมน์ต้นฉบับ",
                     throws(() => TableColumns.Resolve(null, "bogus", t[0])) && throws(() => TableColumns.Resolve("0", null, t[0])) &&
                     throws(() => TableColumns.Resolve("th", "th", t[0])) && throws(() => TableColumns.Resolve(null, "en,note", t[0])));
+                // #16 (REVIEW-fa8176c): เลขเกินตารางเคยถูกข้ามทุกแถว → เทียบ 0 คู่ exit 0 เหมือนผ่าน
+                Check("columns #16: เลขคอลัมน์เกินแถวที่กว้างที่สุด = error ทั้งต้นฉบับและคำแปล · เท่าความกว้างพอดีได้",
+                    throws(() => TableColumns.Resolve(null, "999", t[0], 5)) && throws(() => TableColumns.Resolve("6", null, t[0], 5)) &&
+                    TableColumns.Resolve("5", "1", t[0], 5).Source == 0 && TableColumns.Resolve(null, "999", t[0], 0).Source == 998);
+                Check("csv #16: --columns เลขเกินตารางในโหมดแปลง = error (เดิมไม่แปลงอะไรแล้วจบปกติ)",
+                    throws(() => CsvProcessor.Process("a,b\n1,2\n", new CsvOptions { ColumnIndices = new List<int> { 3 } }, x => x)) &&
+                    CsvProcessor.Process("a,b\n1,2,3\n", new CsvOptions { ColumnIndices = new List<int> { 3 } }, x => x + "!") == "a,b\n1,2,3!\n");
                 var row2 = new List<string> { "q2", "", "x", "ทดสอบ" };
                 Check("columns: ต้นฉบับที่ระบุว่าง/เกินแถว = null แต่ explicit (ไม่เดาแทน)",
                     named.SourceCell(row2, out bool ex2) == null && ex2 && TableColumns.Resolve(null, "9", null).SourceCell(row2, out _) == null);

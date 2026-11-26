@@ -14,6 +14,7 @@
  8. --source-column/--columns เลือกคู่ต้นฉบับ–คำแปลเอง (คอลัมน์หมายเหตุอังกฤษไม่ถูกเดาเป็นต้นฉบับ) · error ชื่อคอลัมน์ = exit 2
     · --json-path /items/*/desc แปลงเฉพาะ path ที่เลือก
  9. --stats คู่ --dry-run / --check: มีรายงานสถิติ (เดิมเงียบ) และไม่เขียนไฟล์
+10. เลขคอลัมน์เกินตาราง (#16): --placeholders/--check/-o ต้อง exit 2 + บอกจำนวนคอลัมน์ · ไม่เขียน output
 """
 import json
 import shutil
@@ -159,6 +160,20 @@ def main() -> int:
             check(f"stats {flag}: มีรายงานคำนอกพจนานุกรม + เตือนรูปพิมพ์ผิด + ไม่เขียนไฟล์",
                   "คำนอกพจนานุกรมที่พบบ่อย" in r.stderr and "พบรูปพิมพ์ผิด" in r.stderr
                   and sorted(p.name for p in st_dir.iterdir()) == ["st.txt"], f"exit={r.returncode}")
+
+        # 10. #16 เลขคอลัมน์เกินตาราง — เดิมโหมดตรวจเทียบ 0 คู่แล้ว exit 0 เหมือนผ่าน
+        c16_dir = work / "c16"
+        c16_dir.mkdir()
+        c16 = c16_dir / "c16.csv"
+        c16.write_text("en,th\nHello {name},สวัสดี {wrong}\n", encoding="utf-8")
+        for args in (("--placeholders", "--source-column", "999", "--columns", "2"),
+                     ("--placeholders", "--source-column", "1", "--columns", "999"),
+                     ("--columns", "999", "--check"),
+                     ("--columns", "999", "-o", str(c16_dir / "out.csv"))):
+            r = run(binary, c16, *args, cwd=work)
+            check(f"#16 {' '.join(args[:3])}…: exit 2 + บอกจำนวนคอลัมน์ + ไม่เขียนไฟล์",
+                  r.returncode == 2 and "มีแค่ 2 คอลัมน์" in r.stderr and sorted(p.name for p in c16_dir.iterdir()) == ["c16.csv"],
+                  f"exit={r.returncode}")
 
         # 6. --inplace สองรอบ + backup (แยกโฟลเดอร์เฉพาะ กัน run ตายเพราะ cp874.txt ในโฟลเดอร์เดียวกัน)
         folder = work / "inplace"
