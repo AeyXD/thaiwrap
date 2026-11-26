@@ -250,6 +250,7 @@ namespace ThaiWrap.Cli
                     var why = new List<string>();
                     if (m.Missing.Count > 0) why.Add("หาย " + PlaceholderChecker.Describe(m.Missing));
                     if (m.Extra.Count > 0) why.Add("เกิน " + PlaceholderChecker.Describe(m.Extra));
+                    why.AddRange(m.Problems);
                     Console.Error.WriteLine("  " + file + (p.IsRow ? " แถว " : ":") + p.Line + " — " + string.Join(" · ", why));
                     Console.Error.WriteLine("    EN: " + Clip(OneLine(p.Source), 90));
                     Console.Error.WriteLine("    TH: " + Clip(OneLine(p.Translation), 90));
@@ -262,7 +263,7 @@ namespace ThaiWrap.Cli
                 Console.Error.WriteLine("ข้าม " + unsupported.Count + " ไฟล์ที่ไม่มีต้นฉบับคู่ในไฟล์ (json/text — รองรับ csv/tsv/po และ -f keyvalue)");
             if (found > 0)
             {
-                Console.Error.WriteLine("ตรวจไม่ผ่าน: แก้ที่ไฟล์แปลต้นทาง — placeholder ต้องเหมือนต้นฉบับทุกตัวอักษร (สลับตำแหน่งได้)");
+                Console.Error.WriteLine("ตรวจไม่ผ่าน: แก้ที่ไฟล์แปลต้นทาง — placeholder ต้องเหมือนต้นฉบับทุกตัวอักษร (สลับตำแหน่งได้ ยกเว้น printf ที่ไม่ระบุตำแหน่ง · แท็กห้ามปิดข้ามชั้น)");
                 return 1;
             }
             return 0;
@@ -290,7 +291,7 @@ namespace ThaiWrap.Cli
                         MispasteDetector.PickThaiEnglish(table[r], out string? thai, out _);
                         if (thai == null) continue;
                         string? src = null;
-                        int best = 0;
+                        int best = -1; // -1: เซลล์ที่ผ่าน LooksLikeSource แต่ไม่มีละตินเลย ("{0}") ก็เลือกได้ (#13)
                         foreach (var cell in table[r])
                         {
                             if (ReferenceEquals(cell, thai) || !PlaceholderChecker.LooksLikeSource(cell)) continue;
@@ -974,7 +975,8 @@ namespace ThaiWrap.Cli
             "  --maxword <n>         ความยาวคำสูงสุดจากพจนานุกรม (default 0 = ไม่จำกัด)\n" +
             "  --unknown-threshold <n> จำนวน cluster ก่อนยอมให้ตัดคำนอกพจนานุกรม (default 8)\n" +
             "  --mispaste           รายงานแถวที่คำแปลน่าจะวางผิดแถว (copy ของแถวอื่น) — csv/tsv, ข้อเสนออย่างเดียว\n" +
-            "  --placeholders       ตรวจ {0} %s <tag> ในคำแปลเทียบต้นฉบับ (หาย/เกิน/สะกดผิด) — csv/tsv/po/keyvalue\n" +
+            "  --placeholders       ตรวจ {0} %s <tag> ในคำแปลเทียบต้นฉบับ (หาย/เกิน/สะกดผิด/printf สลับลำดับ/แท็กปิดข้ามชั้น)\n" +
+            "                       — csv/tsv/po/keyvalue\n" +
             "                       ไม่เขียนไฟล์ · exit 1 ถ้าพบ (ใช้ใน CI ได้) · ไฟล์หรือโฟลเดอร์ (+ -r)\n" +
             "  --check              โหมดตรวจแบบ lint: ไม่เขียนอะไร exit 1 ถ้ายังมีข้อความไทยไม่ถูกแตรป — ใช้ใน CI/pre-commit\n" +
             "  --stats               สถิติเพิ่มเติมทาง stderr";

@@ -9,12 +9,16 @@ namespace ThaiWrap
     {
         public List<string> Missing = new List<string>();
         public List<string> Extra = new List<string>();
+        /// <summary>ของครบแต่โครงสร้างผิด — printf แบบไม่ระบุตำแหน่งสลับลำดับ (#14) · แท็กปิดข้ามชั้น (#15)</summary>
+        public List<string> Problems = new List<string>();
     }
 
     /// <summary>
     /// ตรวจส่วนควบคุมของเกมในคำแปลเทียบต้นฉบับ: {placeholder} · &lt;rich-text tag&gt; · printf (%s %d %1$s %.2f)
     /// — ของที่หาย/เกิน/สะกดผิด ({ชื่อ} แทน {name}, &lt;colour&gt; แทน &lt;color&gt;) ทำให้เกมแทนค่าไม่ได้ แสดงผลพัง
     /// หรือ crash ได้ ร้ายแรงกว่าคำผิด · เทียบแบบ multiset ไม่สนลำดับ เพราะไวยากรณ์ไทยสลับตำแหน่งได้ตามปกติ
+    /// — ยกเว้น printf ที่ไม่ระบุตำแหน่ง (%s %d — ผูก argument ตามลำดับ สลับแล้วชนิดผิด/crash) ต้องเรียงเหมือนต้นฉบับ
+    /// และแท็กต้องไม่ปิดข้ามชั้น (&lt;b&gt;&lt;i&gt;…&lt;/b&gt;&lt;/i&gt;) — ตามรีวิว v0.12.0 (#13–#15)
     /// · {…} และ &lt;…&gt; หาขอบเขตด้วยกฎเดียวกับ <see cref="ThaiWrapOptions.ProtectPlaceholders"/> (ตัวปิดต้องอยู่บรรทัดเดียวกัน)
     ///   แล้วกรองที่ไม่ใช่ placeholder จริงออก (ดู Counts) · ตรวจกับคลังแปล W3 94k คู่ก่อนกำหนดกฎ
     /// · ไม่นับ [วงเล็บเหลี่ยม] เพราะข้อความเกมทั่วไปใช้เป็นถ้อยคำที่แปลได้ (เช่น [กด E])
@@ -118,7 +122,93 @@ namespace ThaiWrap
                     remaining[t] = k - 1;
                 }
             }
-            return result.Missing.Count == 0 && result.Extra.Count == 0 ? null : result;
+
+            // ของครบแล้วจึงดูโครงสร้าง — ไม่รายงานซ้ำกับหาย/เกิน
+            if (result.Missing.Count == 0 && result.Extra.Count == 0)
+            {
+                var srcSeq = ImplicitPrintf(src);
+                var dstSeq = ImplicitPrintf(dst);
+                if (!SameSequence(srcSeq, dstSeq))
+                    result.Problems.Add("printf ไม่ระบุตำแหน่งต้องเรียงตามต้นฉบับ (" + string.Join(" ", srcSeq.ToArray()) +
+                        " → " + string.Join(" ", dstSeq.ToArray()) + ") — ถ้าต้องสลับให้ใช้ %1$s %2$d");
+            }
+            var srcNest = NestingErrors(source);
+            foreach (var e in NestingErrors(translation))
+            {
+                int at = srcNest.IndexOf(e);
+                if (at >= 0) srcNest.RemoveAt(at); // ต้นฉบับพังแบบเดียวกัน = ไม่ใช่ความผิดของคำแปล
+                else result.Problems.Add(e);
+            }
+            return result.Missing.Count == 0 && result.Extra.Count == 0 && result.Problems.Count == 0 ? null : result;
+        }
+
+        /// <summary>printf ที่ไม่มี n$ ตามลำดับที่พบ — ผูก argument ตามลำดับ จึงย้ายที่กันไม่ได้</summary>
+        private static List<string> ImplicitPrintf(List<string> tokens)
+        {
+            var list = new List<string>();
+            foreach (var t in tokens)
+            {
+                if (t[0] != '%') continue;
+                int k = 1;
+                while (k < t.Length && t[k] >= '0' && t[k] <= '9') k++;
+                if (k > 1 && k < t.Length && t[k] == '$') continue; // %1$s = ระบุตำแหน่ง สลับได้
+                list.Add(t);
+            }
+            return list;
+        }
+
+        private static bool SameSequence(List<string> a, List<string> b)
+        {
+            if (a.Count != b.Count) return false;
+            for (int i = 0; i < a.Count; i++) if (a[i] != b[i]) return false;
+            return true;
+        }
+
+        /// <summary>
+        /// แท็กปิดข้ามชั้น: &lt;/x&gt; มาขณะแท็กชั้นในยังเปิดอยู่และแท็กนั้นถูกปิดทีหลัง (&lt;b&gt;&lt;i&gt;…&lt;/b&gt;&lt;/i&gt;) ·
+        /// แท็กชั้นในที่ไม่ถูกปิดเลยในข้อความ (&lt;sprite=1&gt; · &lt;color=red&gt; ที่ TMP ยอมให้ไม่ปิด · &lt;&lt;GUI_Select&gt; ของ W3)
+        /// ถือเป็นแท็กเดี่ยว ไม่ฟ้อง · แท็กปิดลอยและแท็กเปิดค้างไม่ฟ้องที่นี่ (หาย/เกินจับแล้ว และเอนจินส่วนใหญ่ยอมรับ)
+        /// </summary>
+        private static List<string> NestingErrors(string text)
+        {
+            var tags = new List<KeyValuePair<string, bool>>(); // (ชื่อ, เป็นแท็กปิด) ตามลำดับ
+            if (!string.IsNullOrEmpty(text))
+            {
+                for (int i = 0; i < text.Length; i++)
+                {
+                    int end = FindControlEnd(text, i);
+                    if (end < 0) continue;
+                    string token = text.Substring(i, end - i + 1);
+                    i = end;
+                    if (token[0] != '<' || !Counts(token) || token.StartsWith("<<", StringComparison.Ordinal) ||
+                        token.EndsWith("/>", StringComparison.Ordinal)) continue;
+                    bool closing = token.Length > 2 && token[1] == '/';
+                    int k = closing ? 2 : 1, start = k;
+                    while (k < token.Length - 1 && token[k] != ' ' && token[k] != '=' && token[k] != '/' && token[k] != '>') k++;
+                    if (k == start) continue;
+                    tags.Add(new KeyValuePair<string, bool>(token.Substring(start, k - start).ToLowerInvariant(), closing));
+                }
+            }
+
+            var errors = new List<string>();
+            var stack = new List<KeyValuePair<string, int>>(); // (ชื่อ, ตำแหน่งใน tags)
+            for (int t = 0; t < tags.Count; t++)
+            {
+                string name = tags[t].Key;
+                if (!tags[t].Value) { stack.Add(new KeyValuePair<string, int>(name, t)); continue; }
+                int depth = stack.FindLastIndex(e => e.Key == name);
+                if (depth < 0) continue; // แท็กปิดลอย
+                for (int d = stack.Count - 1; d > depth; d--)
+                {
+                    string inner = stack[d].Key;
+                    bool closedLater = false;
+                    for (int u = t + 1; u < tags.Count && !closedLater; u++)
+                        closedLater = tags[u].Value && tags[u].Key == inner;
+                    if (closedLater) errors.Add("แท็กปิดข้ามชั้น: </" + name + "> ปิดก่อน </" + inner + ">");
+                }
+                stack.RemoveRange(depth, stack.Count - depth);
+            }
+            return errors;
         }
 
         /// <summary>

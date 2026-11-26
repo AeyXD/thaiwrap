@@ -649,6 +649,27 @@ namespace ThaiWrap.Tests
                 Check("ph: ต้นฉบับต้องดูเป็นถ้อยคำ", PlaceholderChecker.LooksLikeSource("Deals {0} damage") &&
                     PlaceholderChecker.LooksLikeSource("{0}") && !PlaceholderChecker.LooksLikeSource("item_sword_01") &&
                     !PlaceholderChecker.LooksLikeSource("ดาบ {0}") && !PlaceholderChecker.LooksLikeSource("Start"));
+                // รีวิว v0.12.0 (#14–#15): ของครบแต่โครงสร้างผิด
+                Func<string, string, string> prob = (en, th) =>
+                {
+                    var m = PlaceholderChecker.Compare(en, th);
+                    return m == null ? "ok" : string.Join(" | ", m.Problems);
+                };
+                Check("ph#14: printf ไม่ระบุตำแหน่งสลับชนิด = ผิด", prob("Name %s count %d", "จำนวน %d ชื่อ %s").StartsWith("printf ไม่ระบุตำแหน่ง"),
+                    prob("Name %s count %d", "จำนวน %d ชื่อ %s"));
+                Check("ph#14: printf ระบุตำแหน่งสลับได้", prob("Name %1$s count %2$d", "จำนวน %2$d ชื่อ %1$s") == "ok");
+                Check("ph#14: {n} สลับได้", prob("{0} hit {1}", "{1} ถูก {0} ตี") == "ok");
+                Check("ph#14: printf เรียงเดิมผ่าน", prob("%s has %d gold", "%s มีทอง %d") == "ok");
+                Check("ph#14: ปนแบบระบุตำแหน่งกับ {n} ไม่กระทบ", prob("%s: {0} and %d", "{0} กับ %d ของ %s") .StartsWith("printf"));
+                Check("ph#15: แท็กปิดข้ามชั้น = ผิด", prob("<b><i>Hello</i></b>", "<b><i>สวัสดี</b></i>") == "แท็กปิดข้ามชั้น: </b> ปิดก่อน </i>",
+                    prob("<b><i>Hello</i></b>", "<b><i>สวัสดี</b></i>"));
+                Check("ph#15: ย้ายคู่แท็กทั้งคู่ได้", prob("<b>A</b> and <i>B</i>", "<i>ข</i> กับ <b>ก</b>") == "ok");
+                Check("ph#15: แท็กชั้นในไม่ปิด (sprite/color) ไม่ฟ้อง",
+                    prob("<b>x<sprite=1>y</b>", "<b>ก<sprite=1>ข</b>") == "ok" && prob("<b><color=red>x</b>", "<b><color=red>ก</b>") == "ok");
+                Check("ph#15: แท็กปุ่ม W3 <<GUI> ไม่ฟ้อง", prob("<i>Press <<GUI_Select></i>", "<i>กด <<GUI_Select></i>") == "ok");
+                Check("ph#15: ต้นฉบับพังแบบเดียวกัน ไม่ใช่ความผิดคำแปล", prob("<b><i>A</b></i>", "<b><i>ก</b></i>") == "ok");
+                Check("ph#15: จับคู่ชื่อแท็กไม่สนตัวพิมพ์", prob("<B><i>A</i></b>", "<B><i>ก</i></b>") == "ok" &&
+                    prob("<B><i>A</i></b>", "<B><i>ก</b></i>") == "แท็กปิดข้ามชั้น: </b> ปิดก่อน </i>");
                 Check("ph: Describe รวมตัวซ้ำ", PlaceholderChecker.Describe(new[] { "{0}", "<b>", "{0}" }) == "{0} ×2, <b>");
                 // ตัวตัดคำใช้นิยามเดียวกัน — ไม่แทรกในส่วนควบคุมที่ตัวตรวจนับ
                 string wrapped = seg.InsertZwsp("ยินดีต้อนรับ{player_name}สู่<color=red>ดินแดนมังกร</color>");
