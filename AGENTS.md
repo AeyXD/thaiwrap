@@ -54,10 +54,10 @@ dotnet build src/ThaiWrap.BepInEx -c Release   # plugin — ต้อง 0 warni
 | `src/ThaiWrap.Formats/` | parser csv/tsv/json/po/keyvalue — อนุรักษ์เดิม · `MispasteDetector` (--mispaste) · `TableColumns` (--source-column/--columns ของโหมดตรวจ — ไม่ระบุ = เดาจากเนื้อหาแบบเดิม) · `JsonPathPattern` (--json-path แบบ JSON Pointer + `*`/`**`) |
 | `src/ThaiWrap.Cli/` | CLI + options |
 | `src/ThaiWrap.BepInEx/` | plugin hook TMP/UGUI ตอนเกมรัน (net35) · แผนทดสอบ `docs/PLUGIN-TEST-PLAN.md` |
-| `tests/ThaiWrap.Tests/` | invariant + ชุดประโยคเกม — 242 checks ณ หลัง v0.12.1 (console runner) |
-| `data/words_th.txt` | พจนานุกรม (65,758 คำ ณ v0.12.1) |
+| `tests/ThaiWrap.Tests/` | invariant + ชุดประโยคเกม — 242 checks ณ v0.13.0 (console runner) |
+| `data/words_th.txt` | พจนานุกรม (65,758 คำ ณ v0.13.0) |
 | `nobreak.txt` · `words_extra.txt` · `check_allow.txt` | วลีห้ามตัด · คำเฉพาะเกม · ข้อยกเว้นตัวตรวจคำผิด — ไฟล์ของผู้ใช้ วางข้าง word list (ไม่อยู่ใน repo) |
-| `web/` | หน้าทดสอบ visual — `thaiwrap.js` เป็น **JS port ของ core** ตรงกับ C# ณ v0.12.1 ทุกตัวเลือกตัดคำ (ไม่รวม `--stats`/ร↔ล/mispaste/placeholders) · ตรวจ parity ใน CI ด้วย `tools/js-parity.sh` · push `web/**` = deploy GitHub Pages อัตโนมัติ |
+| `web/` | หน้าทดสอบ visual — `thaiwrap.js` เป็น **JS port ของ core** ตรงกับ C# ณ v0.13.0 ทุกตัวเลือกตัดคำ (ไม่รวม `--stats`/ร↔ล/mispaste/placeholders) · ตรวจ parity ใน CI ด้วย `tools/js-parity.sh` · push `web/**` = deploy GitHub Pages อัตโนมัติ |
 | `tools/` | `publish.sh` (rebuild `publish/` 3 RID · `--zip` = zip CLI ไว้แนบ Release) · `package-plugin.sh` (zip plugin) · `fetch-bepinex.sh` (refs สำหรับ build plugin) · `js-parity.sh` · patch ฟอนต์ · ทดสอบ Godot |
 | `publish/` | binary single-file ของ CLI ต่อ RID (commit ไว้ใน repo) |
 | `docs/MANUAL-TH.md` | คู่มือผู้ใช้ฉบับเต็ม (ติดตั้ง · ตัวเลือกทุกตัว + exit code · โหมดตรวจ · สูตรตามงาน · แก้ปัญหา) — README เป็นภาพรวมที่ชี้มาที่นี่ · **เพิ่ม/เปลี่ยนตัวเลือก CLI ต้องอัปเดตตารางหัวข้อ 10 และหัวข้อที่เกี่ยว** |
