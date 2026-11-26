@@ -51,10 +51,10 @@ dotnet build src/ThaiWrap.BepInEx -c Release   # plugin — ต้อง 0 warni
 | `src/ThaiWrap/PlaceholderChecker.cs` | `--placeholders` เทียบ `{…}` `<…>` printf ในคำแปลกับต้นฉบับ (multiset ไม่สนลำดับ) · `FindControlEnd` เป็นนิยามส่วนควบคุมที่ใช้ร่วมกับ `SplitControlParts` ของตัวตัดคำ — แก้ที่เดียว |
 | `src/ThaiWrap/ThaiNormalizer.cs` | `--normalize` ยุบรูปพิมพ์ผิด (เเ→แ, มาร์คซ้อน/ลำดับผิด) |
 | `src/ThaiWrap/ThaiChunker.cs` | รวมคำเป็นกลุ่มวลีสำหรับโหมด space (พอร์ตจาก ThaiW1Setup) |
-| `src/ThaiWrap.Formats/` | parser csv/tsv/json/po/keyvalue — อนุรักษ์เดิม · `MispasteDetector` (--mispaste) · `TableColumns` (--source-column/--columns ของโหมดตรวจ — ไม่ระบุ = เดาจากเนื้อหาแบบเดิม) · `JsonPathPattern` (--json-path แบบ JSON Pointer + `*`/`**`) |
-| `src/ThaiWrap.Cli/` | CLI + options |
+| `src/ThaiWrap.Formats/` | parser csv/tsv/json/po/keyvalue — อนุรักษ์เดิม · `MispasteDetector` (--mispaste) · `TableColumns` (--source-column/--columns ของโหมดตรวจ — ไม่ระบุ = เดาจากเนื้อหาแบบเดิม) · `JsonPathPattern` (--json-path แบบ JSON Pointer + `*`/`**`) · `QaReport` (โมเดล + เขียน JSON/HTML ของ --report — JSON เขียนเอง ไม่พึ่ง System.Text.Json) |
+| `src/ThaiWrap.Cli/` | CLI + options · `Report.cs` = `--report` (รวมตัวตรวจทุกตัว ไม่เขียนไฟล์แปล — ใช้ฟังก์ชันเดียวกับโหมดตรวจแต่ละตัว อย่าแยกตรรกะซ้ำ) |
 | `src/ThaiWrap.BepInEx/` | plugin hook TMP/UGUI ตอนเกมรัน (net35) · แผนทดสอบ `docs/PLUGIN-TEST-PLAN.md` |
-| `tests/ThaiWrap.Tests/` | invariant + ชุดประโยคเกม — 242 checks ณ v0.13.0 (console runner) |
+| `tests/ThaiWrap.Tests/` | invariant + ชุดประโยคเกม — 252 checks หลัง v0.13.0 (console runner) |
 | `data/words_th.txt` | พจนานุกรม (65,758 คำ ณ v0.13.0) |
 | `nobreak.txt` · `words_extra.txt` · `check_allow.txt` | วลีห้ามตัด · คำเฉพาะเกม · ข้อยกเว้นตัวตรวจคำผิด — ไฟล์ของผู้ใช้ วางข้าง word list (ไม่อยู่ใน repo) |
 | `web/` | หน้าทดสอบ visual — `thaiwrap.js` เป็น **JS port ของ core** ตรงกับ C# ณ v0.13.0 ทุกตัวเลือกตัดคำ (ไม่รวม `--stats`/ร↔ล/mispaste/placeholders) · ตรวจ parity ใน CI ด้วย `tools/js-parity.sh` · push `web/**` = deploy GitHub Pages อัตโนมัติ |
@@ -109,7 +109,7 @@ dotnet build src/ThaiWrap.BepInEx -c Release   # plugin — ต้อง 0 warni
   และแก้วันที่ "อัปเดต" หัวไฟล์ให้ตรง) — เขียนผ่าน symlink แล้ว commit+push ที่ repo รวม
   ตามเช็กลิสต์ท้าย GUIDE
 - **ออกเวอร์ชัน `vX.Y.Z`** (แนวทางจาก v0.8.0): bump `PluginVersion` ใน `ThaiWrapPlugin.cs`
-  ให้ตรงแท็ก → เทสผ่าน → `./tools/publish.sh --zip` → commit "vX.Y.Z: …" (เฉพาะไฟล์ใน
+  และ `<Version>` ใน `src/ThaiWrap.Cli/ThaiWrap.Cli.csproj` (เลขในรายงาน `--report` — package_test ตรวจว่าตรงกัน) ให้ตรงแท็ก → เทสผ่าน → `./tools/publish.sh --zip` → commit "vX.Y.Z: …" (เฉพาะไฟล์ใน
   `publish/`) → `./tools/package-plugin.sh` → แท็ก + GitHub Release ภาษาไทย แนบ `dist/` 4 ไฟล์
   (`thaiwrap-cli-<rid>.zip` ×3 + `ThaiWrap-BepInEx.zip`) → release notes ต้องระบุสถานะ plugin ตรงๆ
   (ตอนนี้คือ "ยังไม่ได้ทดสอบในเกมจริง" จนกว่าแผน `docs/PLUGIN-TEST-PLAN.md` จะผ่าน)

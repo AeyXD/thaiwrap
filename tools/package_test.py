@@ -15,8 +15,11 @@
     · --json-path /items/*/desc แปลงเฉพาะ path ที่เลือก
  9. --stats คู่ --dry-run / --check: มีรายงานสถิติ (เดิมเงียบ) และไม่เขียนไฟล์
 10. เลขคอลัมน์เกินตาราง (#16): --placeholders/--check/-o ต้อง exit 2 + บอกจำนวนคอลัมน์ · ไม่เขียน output
+11. --report (#9): JSON/HTML รวมผลตัวตรวจ · ไฟล์แปลไม่ถูกแตะ · exit 1 เมื่อมี error · --check ทำให้ไม่แตรป = error
+    · รายงานเก่าในโฟลเดอร์ไม่ถูกตรวจซ้ำ · เวอร์ชันในรายงาน = PluginVersion · ค่าผิด (-o/นามสกุล) = exit 2
 """
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -174,6 +177,57 @@ def main() -> int:
             check(f"#16 {' '.join(args[:3])}…: exit 2 + บอกจำนวนคอลัมน์ + ไม่เขียนไฟล์",
                   r.returncode == 2 and "มีแค่ 2 คอลัมน์" in r.stderr and sorted(p.name for p in c16_dir.iterdir()) == ["c16.csv"],
                   f"exit={r.returncode}")
+
+        # 11. --report — รายงาน QA ไม่เขียนไฟล์แปล
+        rp_dir = work / "report"
+        rp_dir.mkdir()
+        rp_csv = rp_dir / "loc.csv"
+        rp_text = ("id,en,th\n1,Hello <b>{name}</b>,สวัสดี <b>{nmae}</b>\n"
+                   "2,The army invades the city,กองทัพบุกลุกเมือง เเละเผาทำลายทุกสิ่ง\n")
+        rp_csv.write_text(rp_text, encoding="utf-8")
+        r = run(binary, rp_dir, "--report", rp_dir / "qa.json", cwd=work)
+        rep = None
+        try:
+            rep = json.loads((rp_dir / "qa.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            check("report: เขียน qa.json ที่ json.load อ่านได้", False, str(e))
+        if rep is not None:
+            by = rep["summary"]["byCheck"]
+            check("report json: exit 1 (มี placeholder ผิด) + รวม placeholders/unwrapped/typo/ral-swap",
+                  r.returncode == 1 and by.get("placeholders") == 1 and by.get("unwrapped") == 1
+                  and by.get("typo") == 1 and by.get("ral-swap") == 1, f"exit={r.returncode} {by}")
+            ph = [f for f in rep["findings"] if f["check"] == "placeholders"]
+            check("report json: placeholder บอกแถว + ต้นฉบับ/คำแปลครบ",
+                  ph and ph[0]["row"] == 2 and ph[0]["translation"] == "สวัสดี <b>{nmae}</b>", str(ph))
+            plugin_src = Path(__file__).resolve().parent.parent / "src" / "ThaiWrap.BepInEx" / "ThaiWrapPlugin.cs"
+            if plugin_src.exists():
+                m = re.search(r'PluginVersion = "([^"]+)"', plugin_src.read_text(encoding="utf-8"))
+                check("report json: version = PluginVersion (bump <Version> ใน ThaiWrap.Cli.csproj ด้วย)",
+                      m is not None and rep["version"] == m.group(1), f"report={rep['version']} plugin={m and m.group(1)}")
+        check("report: ไฟล์แปลไม่ถูกแตะ", rp_csv.read_text(encoding="utf-8") == rp_text)
+        r = run(binary, rp_dir, "--report", rp_dir / "qa.html", cwd=work)
+        html = (rp_dir / "qa.html").read_text(encoding="utf-8") if (rp_dir / "qa.html").exists() else ""
+        check("report html: escape แท็ก + ไม่ตรวจ qa.json ของรอบก่อนเป็นไฟล์แปล",
+              r.returncode == 1 and "&lt;b&gt;{nmae}&lt;/b&gt;" in html and "<b>{nmae}" not in html
+              and "qa.json" not in html and "รายงาน QA: 1 ไฟล์" in r.stderr, f"exit={r.returncode}")
+        check("report: โฟลเดอร์มีแค่ไฟล์แปล + รายงาน 2 ไฟล์",
+              sorted(p.name for p in rp_dir.iterdir()) == ["loc.csv", "qa.html", "qa.json"])
+        ok_csv = rp_dir / "ok" / "ok.csv"
+        ok_csv.parent.mkdir()
+        ok_csv.write_text("en,th\nGood morning {name},สวัสดีตอนเช้า {name}\n", encoding="utf-8")
+        r = run(binary, ok_csv, "--report", "-", cwd=work)
+        r2 = run(binary, ok_csv, "--report", "-", "--check", cwd=work)
+        try:
+            ok_rep, ok_rep2 = json.loads(r.stdout), json.loads(r2.stdout)
+        except ValueError:
+            ok_rep = ok_rep2 = None
+        check("report -: JSON ออก stdout · ไม่แตรปเป็น info (exit 0) · ใส่ --check แล้วเป็น error (exit 1)",
+              ok_rep is not None and r.returncode == 0 and ok_rep["summary"]["errors"] == 0
+              and r2.returncode == 1 and ok_rep2["summary"]["errors"] == 1, f"exit={r.returncode}/{r2.returncode}")
+        for args in (("--report", "qa.txt"), ("--report", "x.json", "-o", "out.csv"), ("--report", "x.json", "--inplace")):
+            r = run(binary, ok_csv, *args, cwd=rp_dir / "ok")
+            check(f"report {' '.join(args[2:]) or args[1]}: exit 2 + ไม่เขียนอะไร",
+                  r.returncode == 2 and sorted(p.name for p in (rp_dir / "ok").iterdir()) == ["ok.csv"], f"exit={r.returncode}")
 
         # 6. --inplace สองรอบ + backup (แยกโฟลเดอร์เฉพาะ กัน run ตายเพราะ cp874.txt ในโฟลเดอร์เดียวกัน)
         folder = work / "inplace"

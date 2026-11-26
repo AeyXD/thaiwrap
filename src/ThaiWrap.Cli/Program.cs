@@ -8,7 +8,7 @@ using ThaiWrap.Formats;
 
 namespace ThaiWrap.Cli
 {
-    public static class Program
+    public static partial class Program
     {
         private sealed class Config
         {
@@ -36,6 +36,7 @@ namespace ThaiWrap.Cli
             public bool Check;
             public int MaxDiff = 40;
             public bool Stats;
+            public string? Report;               // --report <file.json|file.html|-> — รายงาน QA รวม ไม่เขียนไฟล์แปล
             public ThaiWrapOptions Options = new ThaiWrapOptions();
         }
 
@@ -87,9 +88,18 @@ namespace ThaiWrap.Cli
 
         private static int Run(Config cfg)
         {
-            // โหมดตรวจ "วางคำแปลผิดแถว" — ไม่ต้องใช้ word list (ตรวจโครงสร้างตารางล้วนๆ) ทำก่อนอื่น
-            if (cfg.Mispaste) return RunMispaste(cfg);
-            if (cfg.Placeholders) return RunPlaceholders(cfg);
+            if (cfg.Report != null)
+            {
+                // ตรวจค่าก่อนโหลด dict — ผิดแล้วจบเร็ว · --report รวม --mispaste/--placeholders/--stats ไว้แล้ว
+                string? bad = ValidateReport(cfg);
+                if (bad != null) { Console.Error.WriteLine(bad); return 2; }
+            }
+            else
+            {
+                // โหมดตรวจ "วางคำแปลผิดแถว" — ไม่ต้องใช้ word list (ตรวจโครงสร้างตารางล้วนๆ) ทำก่อนอื่น
+                if (cfg.Mispaste) return RunMispaste(cfg);
+                if (cfg.Placeholders) return RunPlaceholders(cfg);
+            }
 
             cfg.WordList = ResolveWordList(cfg);
             if (!File.Exists(cfg.WordList))
@@ -120,7 +130,7 @@ namespace ThaiWrap.Cli
                 segmenter = ThaiSegmenter.FromFile(cfg.WordList, cfg.Options);
                 cfg.CheckWords = new List<string>(File.ReadAllLines(cfg.WordList));
             }
-            string? allowPath = cfg.Stats ? FindDataFile("check_allow.txt", cfg.WordList) : null;
+            string? allowPath = cfg.Stats || cfg.Report != null ? FindDataFile("check_allow.txt", cfg.WordList) : null;
             if (allowPath != null)
             {
                 cfg.CheckAllow = CheckAllow.Load(allowPath);
@@ -129,6 +139,7 @@ namespace ThaiWrap.Cli
             Func<string, string> transform = cfg.Mode == "sep"
                 ? (Func<string, string>)(s => segmenter.SegmentToString(s))
                 : s => segmenter.InsertZwsp(s);
+            if (cfg.Report != null) return RunReport(cfg, transform, segmenter, extraPath, noBreakPath, allowPath);
 
             if (cfg.InputPath == null)
             {
@@ -182,14 +193,7 @@ namespace ThaiWrap.Cli
 
             (string input, _) = ReadTextWithBom(cfg.InputPath);
             var table = CsvProcessor.ParseTable(input, format == "tsv" ? '\t' : DetectCsvDelimiter(input));
-            var sel = ResolveTableColumns(cfg, table);
-            var hits = sel.IsAuto ? MispasteDetector.Detect(table) : MispasteDetector.Detect(table,
-                (IReadOnlyList<string> row, int ri, out string? thai, out string? en) =>
-                {
-                    var cells = sel.TranslationCells(row, ri);
-                    thai = cells.Count > 0 ? cells[0] : null; // หลายคอลัมน์คำแปล: --mispaste ใช้คอลัมน์แรกที่มีข้อความ
-                    en = thai == null ? null : sel.SourceCell(row, out bool ex) ?? (ex ? null : MispasteDetector.PickEnglish(row, thai));
-                });
+            var hits = DetectMispaste(cfg, table);
 
             Console.Error.WriteLine("--- ตรวจ \"วางคำแปลผิดแถว\": " + cfg.InputPath + " (" + table.Count + " แถว) — " +
                 hits.Count + " จุดน่าสงสัย · เป็นข้อเสนอ ตรวจด้วยตาก่อนแก้ที่ต้นทาง");
@@ -200,6 +204,18 @@ namespace ThaiWrap.Cli
                 Console.Error.WriteLine("    TH: " + Clip(h.Thai, 70));
             }
             return 0;
+        }
+
+        private static List<MispasteHit> DetectMispaste(Config cfg, List<List<string>> table)
+        {
+            var sel = ResolveTableColumns(cfg, table);
+            return sel.IsAuto ? MispasteDetector.Detect(table) : MispasteDetector.Detect(table,
+                (IReadOnlyList<string> row, int ri, out string? thai, out string? en) =>
+                {
+                    var cells = sel.TranslationCells(row, ri);
+                    thai = cells.Count > 0 ? cells[0] : null; // หลายคอลัมน์คำแปล: --mispaste ใช้คอลัมน์แรกที่มีข้อความ
+                    en = thai == null ? null : sel.SourceCell(row, out bool ex) ?? (ex ? null : MispasteDetector.PickEnglish(row, thai));
+                });
         }
 
         /// <summary>ข้อความแปลหนึ่งชิ้นคู่กับต้นฉบับ สำหรับ --placeholders</summary>
@@ -222,16 +238,7 @@ namespace ThaiWrap.Cli
                 return 2;
             }
             List<string> files;
-            if (Directory.Exists(cfg.InputPath))
-            {
-                var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".csv", ".tsv", ".json", ".po", ".pot", ".txt" };
-                files = Directory.EnumerateFiles(cfg.InputPath, "*",
-                        cfg.Recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly)
-                    .Where(p => exts.Contains(Path.GetExtension(p)))
-                    .Where(p => !p.Contains(".zwsp.") && !p.EndsWith(".bak", StringComparison.OrdinalIgnoreCase))
-                    .OrderBy(p => p, StringComparer.Ordinal)
-                    .ToList();
-            }
+            if (Directory.Exists(cfg.InputPath)) files = ListFolder(cfg);
             else if (File.Exists(cfg.InputPath)) files = new List<string> { cfg.InputPath };
             else
             {
@@ -259,11 +266,7 @@ namespace ThaiWrap.Cli
                     var m = PlaceholderChecker.Compare(p.Source, p.Translation);
                     if (m == null) continue;
                     found++;
-                    var why = new List<string>();
-                    if (m.Missing.Count > 0) why.Add("หาย " + PlaceholderChecker.Describe(m.Missing));
-                    if (m.Extra.Count > 0) why.Add("เกิน " + PlaceholderChecker.Describe(m.Extra));
-                    why.AddRange(m.Problems);
-                    Console.Error.WriteLine("  " + file + (p.IsRow ? " แถว " : ":") + p.Line + " — " + string.Join(" · ", why));
+                    Console.Error.WriteLine("  " + file + (p.IsRow ? " แถว " : ":") + p.Line + " — " + DescribeMismatch(m));
                     Console.Error.WriteLine("    EN: " + Clip(OneLine(p.Source), 90));
                     Console.Error.WriteLine("    TH: " + Clip(OneLine(p.Translation), 90));
                 }
@@ -279,6 +282,42 @@ namespace ThaiWrap.Cli
                 return 1;
             }
             return 0;
+        }
+
+        private static string DescribeMismatch(PlaceholderMismatch m)
+        {
+            var why = new List<string>();
+            if (m.Missing.Count > 0) why.Add("หาย " + PlaceholderChecker.Describe(m.Missing));
+            if (m.Extra.Count > 0) why.Add("เกิน " + PlaceholderChecker.Describe(m.Extra));
+            why.AddRange(m.Problems);
+            return string.Join(" · ", why);
+        }
+
+        /// <summary>ไฟล์ที่โหมด folder ประมวลผล — นามสกุลที่รองรับ ไม่รวมผลลัพธ์ .zwsp.* และ .bak</summary>
+        private static List<string> ListFolder(Config cfg)
+        {
+            var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".csv", ".tsv", ".json", ".po", ".pot", ".txt" };
+            return Directory.EnumerateFiles(cfg.InputPath!, "*",
+                    cfg.Recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly)
+                .Where(p => exts.Contains(Path.GetExtension(p)))
+                .Where(p => !p.Contains(".zwsp.") && !p.EndsWith(".bak", StringComparison.OrdinalIgnoreCase))
+                .Where(p => !IsQaReportFile(p))
+                .OrderBy(p => p, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        /// <summary>
+        /// รายงาน --report แบบ JSON ที่เคยเขียนไว้ในโฟลเดอร์ที่ตรวจ — ไม่ใช่ไฟล์แปล ห้ามถูกแปลง/ตรวจซ้ำ
+        /// (ดูจากหัวไฟล์ที่ <see cref="QaReport.ToJson"/> เขียนเสมอ)
+        /// </summary>
+        private static bool IsQaReportFile(string path)
+        {
+            if (!path.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) return false;
+            var head = new byte[QaReport.JsonHead.Length + 3];
+            int n;
+            using (var fs = File.OpenRead(path)) n = fs.Read(head, 0, head.Length);
+            string s = Encoding.UTF8.GetString(head, 0, n).TrimStart('\uFEFF');
+            return s.StartsWith(QaReport.JsonHead, StringComparison.Ordinal);
         }
 
         private static string OneLine(string s) =>
@@ -415,6 +454,7 @@ namespace ThaiWrap.Cli
                     case "--placeholders": cfg.Placeholders = true; break;
                     case "--check": cfg.Check = true; break;
                     case "--stats": cfg.Stats = true; break;
+                    case "--report": cfg.Report = Val(args, ref i); break;
                     case "--help":
                     case "-h":
                         Console.Out.WriteLine(Usage);
@@ -482,14 +522,7 @@ namespace ThaiWrap.Cli
                 Console.Error.WriteLine("หมายเหตุ: โหมด folder ไม่ใช้ -o — ใช้ --inplace หรือค่า default (.zwsp.<ext>)");
 
             var totals = new Totals();
-            var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".csv", ".tsv", ".json", ".po", ".pot", ".txt" };
-            var files = Directory.EnumerateFiles(cfg.InputPath!, "*",
-                    cfg.Recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly)
-                .Where(p => exts.Contains(Path.GetExtension(p)))
-                .Where(p => !p.Contains(".zwsp."))
-                .Where(p => !p.EndsWith(".bak", StringComparison.OrdinalIgnoreCase))
-                .OrderBy(p => p, StringComparer.Ordinal)
-                .ToList();
+            var files = ListFolder(cfg);
 
             foreach (var file in files)
             {
@@ -703,27 +736,53 @@ namespace ThaiWrap.Cli
         private static void PrintContextSuggestions(Config cfg, Totals totals, int top)
         {
             if (cfg.CheckWords == null || totals.Checks.Count == 0) return;
+            var groups = BuildSuggestionGroups(cfg, totals.Checks, out int withEnglish);
+            if (withEnglish > 0)
+                Console.Error.WriteLine("ตัวตรวจคำผิดใช้ต้นฉบับอังกฤษตัดข้อเสนอที่ขัดกับต้นฉบับ: " + withEnglish + "/" + totals.Checks.Count + " ข้อความมีคู่อังกฤษ");
+            PrintSuggestionKind(groups, SuggestionKind.RalSwap, "คำที่น่าจะพิมพ์สลับ ร↔ล / สะกดผิด", top);
+            PrintSuggestionKind(groups, SuggestionKind.WrongWord,
+                "คำที่สะกดถูกแต่น่าจะผิดบริบท (" + totals.CheckFiles + " ไฟล์เป็นคลังสถิติ — ยิ่งคลังใหญ่ยิ่งแม่น)", top);
+        }
+
+        /// <summary>
+        /// ข้อเสนอแก้คำของทั้งคลัง จัดกลุ่มตามรูป (ชนิด + คำผิด + คำเสนอ) พร้อมตำแหน่งแรกที่พบ — ทุกไฟล์รวมเป็นคลังเดียวก่อน
+        /// เพราะตัวตรวจ "สะกดถูกแต่ผิดบริบท" ใช้สถิติคู่คำของทั้งคลัง
+        /// </summary>
+        private static List<SuggestionGroup> BuildSuggestionGroups(Config cfg, List<CheckEntry> checks, out int withEnglish)
+        {
+            withEnglish = 0;
+            var result = new List<SuggestionGroup>();
+            if (cfg.CheckWords == null || checks.Count == 0) return result;
             var checker = new ThaiContextChecker(cfg.CheckWords, cfg.CheckAllow);
-            foreach (var e in totals.Checks) checker.AddCorpus(e.Text);
+            foreach (var e in checks) checker.AddCorpus(e.Text);
 
             var groups = new Dictionary<string, SuggestionGroup>();
-            int withEnglish = 0;
-            foreach (var e in totals.Checks)
+            foreach (var e in checks)
             {
                 if (e.English != null) withEnglish++;
                 foreach (var s in checker.CheckRal(e.Text, e.English).Concat(checker.CheckWrongWord(e.Text, e.English)))
                 {
                     string key = (int)s.Kind + "\u0001" + s.Wrong + "\u0001" + s.Suggested;
                     if (!groups.TryGetValue(key, out var g))
+                    {
                         groups[key] = g = new SuggestionGroup { First = s, Entry = e };
+                        result.Add(g);
+                    }
                     g.Count++;
                 }
             }
-            if (withEnglish > 0)
-                Console.Error.WriteLine("ตัวตรวจคำผิดใช้ต้นฉบับอังกฤษตัดข้อเสนอที่ขัดกับต้นฉบับ: " + withEnglish + "/" + totals.Checks.Count + " ข้อความมีคู่อังกฤษ");
-            PrintSuggestionKind(groups.Values, SuggestionKind.RalSwap, "คำที่น่าจะพิมพ์สลับ ร↔ล / สะกดผิด", top);
-            PrintSuggestionKind(groups.Values, SuggestionKind.WrongWord,
-                "คำที่สะกดถูกแต่น่าจะผิดบริบท (" + totals.CheckFiles + " ไฟล์เป็นคลังสถิติ — ยิ่งคลังใหญ่ยิ่งแม่น)", top);
+            return result;
+        }
+
+        /// <summary>บรรทัด (หรือแถว) และบริบท ±20 ตัวอักษรของตำแหน่งแรกที่พบ</summary>
+        private static void SuggestionLocation(SuggestionGroup g, out int line, out string context)
+        {
+            var s = g.First;
+            var e = g.Entry;
+            line = e.Line;
+            if (!e.IsRow) for (int i = 0; i < s.Start; i++) if (e.Text[i] == '\n') line++;
+            int from = Math.Max(0, s.Start - 20), to = Math.Min(e.Text.Length, s.End + 20);
+            context = e.Text.Substring(from, to - from).Replace('\n', ' ').Replace('\r', ' ');
         }
 
         /// <summary>ข้อความหนึ่งชิ้นสำหรับตัวตรวจคำผิด — ไทย + ต้นฉบับอังกฤษ (ถ้าหาได้) + ตำแหน่งสำหรับรายงาน</summary>
@@ -819,16 +878,8 @@ namespace ThaiWrap.Cli
             {
                 var s = g.First;
                 var e = g.Entry;
-                string where;
-                if (e.IsRow) where = " แถว " + e.Line;
-                else
-                {
-                    int line = e.Line;
-                    for (int i = 0; i < s.Start; i++) if (e.Text[i] == '\n') line++;
-                    where = ":" + line;
-                }
-                int from = Math.Max(0, s.Start - 20), to = Math.Min(e.Text.Length, s.End + 20);
-                string ctx = e.Text.Substring(from, to - from).Replace('\n', ' ').Replace('\r', ' ');
+                SuggestionLocation(g, out int line, out string ctx);
+                string where = (e.IsRow ? " แถว " : ":") + line;
                 Console.Error.WriteLine("  " + s.Wrong + " → " + s.Suggested + " ×" + g.Count +
                     "   " + Path.GetFileName(e.Path) + where + "  …" + ctx + "…");
             }
@@ -1032,6 +1083,8 @@ namespace ThaiWrap.Cli
             "                       — csv/tsv/po/keyvalue\n" +
             "                       ไม่เขียนไฟล์ · exit 1 ถ้าพบ (ใช้ใน CI ได้) · ไฟล์หรือโฟลเดอร์ (+ -r)\n" +
             "  --check              โหมดตรวจแบบ lint: ไม่เขียนอะไร exit 1 ถ้ายังมีข้อความไทยไม่ถูกแตรป — ใช้ใน CI/pre-commit\n" +
-            "  --stats               สถิติเพิ่มเติมทาง stderr";
+            "  --stats               สถิติเพิ่มเติมทาง stderr\n" +
+            "  --report <file>      รายงาน QA รวมทุกตัวตรวจ (แตรป/placeholder/วางผิดแถว/คำผิด/คำนอก dict) — .json | .html | - (JSON ออก stdout)\n" +
+            "                       ไม่เขียนไฟล์แปล · exit 1 ถ้ามีข้อต้องแก้ (placeholder · ไม่แตรปเมื่อใส่ --check)";
     }
 }

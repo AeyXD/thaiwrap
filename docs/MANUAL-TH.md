@@ -250,8 +250,9 @@ thaiwrap ui.json --json-path "/menu.start,/dialogs/**/text"      # หลาย 
 | `--placeholders` | `{0}` `%s` `<tag>` ในคำแปลเทียบต้นฉบับ | ไม่ | 1 ถ้าพบ | ไม่ใช้ |
 | `--mispaste` | คำแปลที่น่าจะวางผิดแถว (csv/tsv ไฟล์เดียว) | ไม่ | 0 เสมอ (ข้อเสนอ) | ไม่ใช้ |
 | `--stats` | คำนอกพจนานุกรม · รูปพิมพ์ผิด · คำผิดตามบริบท | ตามปกติ — คู่ `--dry-run` = ไม่เขียน | ตามปกติ | ใช้ |
+| `--report <ไฟล์>` | **ทุกข้อข้างบนรวมกัน** เป็นไฟล์ JSON หรือ HTML **[หลัง v0.13.0]** | ไม่ (เขียนแค่ไฟล์รายงาน) | 1 ถ้ามีข้อ "ต้องแก้" | ใช้ |
 
-ทุกโหมดพิมพ์รายงานทาง stderr · ผลของ `--mispaste` และข้อเสนอใน `--stats` **เป็นข้อเสนอ** ตรวจด้วยตาแล้วแก้ที่ไฟล์ต้นทางเอง
+โหมดอื่นพิมพ์รายงานทาง stderr · `--report` เขียนเป็นไฟล์ไว้ส่งต่อทีม/เครื่องมืออื่น (ดูหัวข้อย่อยท้ายหัวข้อนี้) · ผลของ `--mispaste` และข้อเสนอใน `--stats` **เป็นข้อเสนอ** ตรวจด้วยตาแล้วแก้ที่ไฟล์ต้นทางเอง
 
 ### `--check` — กันไฟล์ที่ยังไม่แปลงหลุดเข้าเกม
 
@@ -325,6 +326,54 @@ thaiwrap translations/ -r --stats --dry-run      # รายงานอย่�
 
 รูปที่ตรวจแล้วว่าถูก ใส่ `check_allow.txt` (หัวข้อ 6) เพื่อไม่ให้ขึ้นซ้ำ
 
+### `--report` — รายงาน QA เป็นไฟล์ JSON/HTML **[หลัง v0.13.0]**
+
+รวมผลตัวตรวจทุกตัวในรอบเดียว แล้วเขียนเป็นไฟล์รายงาน — **ไม่แตะไฟล์แปลเลย** (เหมือน `--check`)
+
+```bash
+thaiwrap loc/ -r --columns th --source-column en --report qa.html   # เปิดในเบราว์เซอร์ ส่งให้ทีมแปล
+thaiwrap loc/ -r --report qa.json                                    # ให้เครื่องมืออื่นอ่าน
+thaiwrap loc/ -r --report - > qa.json                                # JSON ออก stdout
+```
+
+- ชนิดไฟล์ดูจากนามสกุล: `.json` · `.html`/`.htm` · `-` = JSON ออก stdout (ข้อความสรุปยังออก stderr)
+- HTML เป็นไฟล์เดียวจบ ไม่โหลดอะไรจากเน็ต เปิดออฟไลน์ได้ · แท็กของเกมในคำแปลแสดงเป็นตัวอักษรตามจริง
+- ตัวเลือกเลือกข้อความ (`--columns` `--source-column` `--json-keys` `--json-path` `-f`) และไฟล์โปรเจกต์
+  (`words_extra.txt` `nobreak.txt` `check_allow.txt`) มีผลเหมือนโหมดอื่น — รายงานบันทึกค่าที่ใช้ไว้ในส่วน "ค่าตั้งที่ใช้"
+- ไม่ต้องใส่ `--placeholders` `--mispaste` `--stats` คู่ — `--report` ตรวจทุกอย่างให้แล้ว · ใช้คู่ `-o`/`--inplace` ไม่ได้ (exit 2)
+- รายงาน `.json` ที่เขียนไว้ในโฟลเดอร์ที่ตรวจ จะไม่ถูกนับเป็นไฟล์แปลในรอบถัดไป (ทั้งโหมดตรวจและโหมดแปลง)
+
+ระดับของแต่ละข้อ:
+
+| ระดับ | ตัวตรวจ (รหัสใน JSON) |
+|---|---|
+| ต้องแก้ (`error`) → exit 1 | `placeholders` · `unwrapped` เมื่อใส่ `--check` ด้วย |
+| ควรตรวจ (`warning`) | `mispaste` · `typo` (รูปพิมพ์ผิด) · `ambiguous` (รูปกำกวม) · `ral-swap` · `wrong-word` |
+| แจ้ง (`info`) | `unwrapped` — ไฟล์ที่ยังไม่แปลง (ปกติก่อนแปลง จึงไม่นับเป็นปัญหาถ้าไม่ใส่ `--check`) |
+
+โครง JSON (`schema` 1 — เพิ่ม field ได้ในอนาคต แต่ไม่เปลี่ยนความหมายของ field เดิม):
+
+```json
+{
+  "tool": "thaiwrap", "version": "…", "schema": 1, "generated": "2026-11-26T08:00:00Z", "input": "loc/",
+  "settings": { "columns": "th", "break-char": "zwsp", "…": "…" },
+  "summary": { "files": 12, "errors": 1, "warnings": 4, "infos": 12, "byCheck": { "placeholders": 1 },
+               "placeholderPairs": 830, "placeholderNoSource": 0, "checkTexts": 830, "checkTextsWithEnglish": 812 },
+  "files": [ { "path": "loc/quest.csv", "format": "csv", "wrapped": false, "breaksToInsert": 154, "typos": 0, "ambiguous": 0 } ],
+  "findings": [
+    { "check": "placeholders", "severity": "error", "file": "loc/quest.csv", "row": 2,
+      "message": "หาย {name} · เกิน {nmae}", "source": "Hello {name}", "translation": "สวัสดี {nmae}" },
+    { "check": "ral-swap", "severity": "warning", "file": "loc/quest.csv", "row": 9, "message": "บุกลุก → บุกรุก ×3",
+      "wrong": "บุกลุก", "suggested": "บุกรุก", "count": 3, "context": "กองทัพบุกลุกเมือง" }
+  ],
+  "unknownWords": [ { "word": "เกรัลท์", "count": 5 } ]
+}
+```
+
+- csv/tsv ใช้ `"row"` (เลขแถว นับ header เป็นแถว 1) · ฟอร์แมตอื่นใช้ `"line"` · `0` = ทั้งไฟล์
+- `ral-swap`/`wrong-word` รวมเป็นรูปละข้อ: `count` = จำนวนครั้งทั้งคลัง · ตำแหน่งและ `context` = ที่แรกที่พบ
+- `files[].wrapped`: `true` แตรปครบ · `false` ยังไม่ครบ · `null` ไม่ได้ตรวจ (นามสกุลไม่รู้จัก)
+
 ---
 
 ## 9. สูตรตามงาน
@@ -373,6 +422,15 @@ jobs:
       - run: tw/ThaiWrap.Cli loc/ -r --columns th --check
 ```
 
+**ส่งรายงาน QA ให้ทีมแปลทุก PR** — เก็บ `qa.html` เป็น artifact ของ GitHub Actions (ต่อจาก steps ด้านบน):
+
+```yaml
+      - run: tw/ThaiWrap.Cli loc/ -r --columns th --report qa.html
+        continue-on-error: true            # exit 1 เมื่อมี placeholder พัง — ให้ยังอัปโหลดรายงานได้
+      - uses: actions/upload-artifact@v4
+        with: { name: thai-qa, path: qa.html }
+```
+
 **ลบจุดตัดออก (ย้อนกลับ)** — ใช้ไฟล์ `.bak` หรือต้นฉบับจะดีที่สุด · ถ้าไม่มี ลบตัวคั่นที่แทรกได้ (ใช้ได้เฉพาะ ZWSP/hairspace
 และเมื่อไม่ได้เปิด `--normalize`/`--yamok-nbsp`/`nobreak.txt`):
 
@@ -409,12 +467,13 @@ perl -CSD -pi -e 's/\x{200B}//g' file.csv      # ZWSP — hairspace ใช้ \x
 | `--placeholders` | — | ตรวจ placeholder/แท็กเทียบต้นฉบับ |
 | `--mispaste` | — | ตรวจคำแปลวางผิดแถว (csv/tsv) |
 | `--stats` | — | สถิติ + ข้อเสนอแก้คำ |
+| `--report` | `qa.json` · `qa.html` · `-` | รายงาน QA รวมทุกตัวตรวจ ไม่เขียนไฟล์แปล **[หลัง v0.13.0]** |
 | `-h`, `--help` | — | แสดงวิธีใช้ |
 
 | exit code | ความหมาย |
 |---|---|
 | 0 | สำเร็จ / ตรวจผ่าน |
-| 1 | `--check` หรือ `--placeholders` พบปัญหา |
+| 1 | `--check` หรือ `--placeholders` พบปัญหา · `--report` มีข้อ "ต้องแก้" |
 | 2 | ใช้ผิด (ตัวเลือก/ค่าผิด · ไม่พบคอลัมน์หรือเลขคอลัมน์เกินตาราง) · หาไฟล์/พจนานุกรมไม่เจอ · การเข้ารหัสไฟล์ผิด — ไม่มีการเขียนไฟล์ |
 
 ---

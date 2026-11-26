@@ -758,6 +758,66 @@ namespace ThaiWrap.Tests
                     PlaceholderChecker.Extract(wrapped).SequenceEqual(new[] { "{player_name}", "<color=red>", "</color>" }), wrapped);
             }
 
+            Console.WriteLine("== รายงาน QA (--report) ==");
+            {
+                var rep = new QaReport { Version = "9.9.9", Input = "loc/", GeneratedUtc = new DateTime(2026, 11, 26, 8, 0, 0, DateTimeKind.Utc) };
+                rep.Settings.Add(new KeyValuePair<string, string>("columns", "th"));
+                rep.Files.Add(new QaFileInfo { Path = "loc/a.csv", Format = "csv", Wrapped = false, BreaksToInsert = 7, Typos = 1 });
+                rep.Files.Add(new QaFileInfo { Path = "loc/x.dat", Note = "ข้าม" });
+                rep.Findings.Add(new QaFinding
+                {
+                    Check = "placeholders", Severity = QaSeverity.Error, File = "loc/a.csv", Line = 2, IsRow = true,
+                    Message = "หาย {name}", Source = "Hello <b>{name}</b> \"q\"", Translation = "สวัสดี <b>{nmae}</b>\nบรรทัด\u0001",
+                });
+                rep.Findings.Add(new QaFinding { Check = "unwrapped", Severity = QaSeverity.Info, File = "loc/a.csv", Message = "+7" });
+                rep.Findings.Add(new QaFinding
+                {
+                    Check = "ral-swap", Severity = QaSeverity.Warning, File = "loc/a.csv", Line = 4, IsRow = true, Message = "บุกลุก → บุกรุก ×3",
+                    Wrong = "บุกลุก", Suggested = "บุกรุก", Count = 3, Context = "กองทัพบุกลุกเมือง",
+                });
+                rep.UnknownWords.Add(new KeyValuePair<string, int>("เกรัลท์", 5));
+
+                string repJson = rep.ToJson();
+                bool parsed = true;
+                System.Text.Json.JsonElement root = default;
+                try { root = System.Text.Json.JsonDocument.Parse(repJson).RootElement; }
+                catch (System.Text.Json.JsonException) { parsed = false; }
+                Check("report: JSON ถูกไวยากรณ์ (parser มาตรฐานอ่านได้)", parsed, repJson.Length > 300 ? repJson.Substring(0, 300) : repJson);
+                Check("report: ขึ้นต้นด้วย JsonHead (CLI ใช้ข้ามรายงานเก่าในโฟลเดอร์)", repJson.StartsWith(QaReport.JsonHead, StringComparison.Ordinal));
+                if (parsed)
+                {
+                    var sum = root.GetProperty("summary");
+                    Check("report: summary นับตามระดับ error/warning/info",
+                        sum.GetProperty("errors").GetInt32() == 1 && sum.GetProperty("warnings").GetInt32() == 1 && sum.GetProperty("infos").GetInt32() == 1
+                        && sum.GetProperty("byCheck").GetProperty("placeholders").GetInt32() == 1);
+                    var f0 = root.GetProperty("findings")[0];
+                    Check("report: ข้อความไป-กลับครบ (quote · newline · control char · แท็ก)",
+                        f0.GetProperty("translation").GetString() == "สวัสดี <b>{nmae}</b>\nบรรทัด\u0001"
+                        && f0.GetProperty("source").GetString() == "Hello <b>{name}</b> \"q\"");
+                    Check("report: csv ใช้ \"row\" · ทั้งไฟล์ line 0 · ไฟล์ข้ามมี wrapped null",
+                        f0.GetProperty("row").GetInt32() == 2 && root.GetProperty("findings")[1].GetProperty("line").GetInt32() == 0
+                        && root.GetProperty("files")[1].GetProperty("wrapped").ValueKind == System.Text.Json.JsonValueKind.Null);
+                    Check("report: ข้อเสนอคำผิดมี wrong/suggested/count + คำนอก dict",
+                        root.GetProperty("findings")[2].GetProperty("count").GetInt32() == 3
+                        && root.GetProperty("unknownWords")[0].GetProperty("word").GetString() == "เกรัลท์"
+                        && root.GetProperty("version").GetString() == "9.9.9" && root.GetProperty("schema").GetInt32() == QaReport.Schema);
+                }
+
+                string html = rep.ToHtml();
+                Check("report: HTML escape แท็กของเกม — แสดงเป็นตัวอักษร ไม่กลายเป็น markup",
+                    html.Contains("สวัสดี &lt;b&gt;{nmae}&lt;/b&gt;") && !html.Contains("<b>{nmae}") && html.Contains("&quot;q&quot;"), "");
+                Check("report: HTML ไฟล์เดียวจบ (ไม่โหลด script/stylesheet ภายนอก) + โหมดมืด",
+                    !html.Contains("<script") && !html.Contains("<link") && !html.Contains("http") && html.Contains("prefers-color-scheme:dark"));
+                Check("report: HTML จัดกลุ่มตามตัวตรวจ (ต้องแก้ก่อน)",
+                    html.IndexOf(QaReport.CheckTitle("placeholders"), StringComparison.Ordinal) < html.IndexOf(QaReport.CheckTitle("ral-swap"), StringComparison.Ordinal)
+                    && html.Contains("<b>บุกลุก</b> → <b>บุกรุก</b> ×3"));
+
+                var empty = new QaReport { Version = "1.0.0", Input = "x" };
+                bool emptyOk = true;
+                try { System.Text.Json.JsonDocument.Parse(empty.ToJson()); } catch (System.Text.Json.JsonException) { emptyOk = false; }
+                Check("report: รายงานว่าง JSON ถูก + HTML บอก \"ไม่พบปัญหา\"", emptyOk && empty.ToHtml().Contains("ไม่พบปัญหา"));
+            }
+
             Console.WriteLine("== segmentation coverage ==");
             var allTokens = new List<Token>();
             foreach (var line in lines) allTokens.AddRange(seg.Tokenize(line));
