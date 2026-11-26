@@ -8,7 +8,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <RootNamespace>ThaiWrap.Cli</RootNamespace>
     <!-- เลขเวอร์ชันในรายงาน QA (report) — bump พร้อม PluginVersion ตอนออกเวอร์ชัน (package_test ตรวจว่าตรงกัน) -->
-    <Version>0.13.0</Version>
+    <Version>0.14.0</Version>
     <!-- สำหรับ dotnet publish -r <RID>: single-file trim — ใส่ในนี้เพื่อไม่ให้ property
          ไหลไปเป็น global กดโปรเจกต์ netstandard2.0 (NETSDK1124) -->
     <PublishSingleFile>true</PublishSingleFile>
